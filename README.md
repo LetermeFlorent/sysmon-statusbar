@@ -21,7 +21,7 @@ CPU ▓▓░░░ 34%   GPU ░░░░░ 12%   DISK ▓░░░░ 11%   R
 ```
 
 - **Real progress bars**, drawn with an embedded icon font, sharing the exact glyphs and fill algorithm of [Claude Rate Limit Status Bar](https://github.com/LetermeFlorent/claude-ratelimit-statusbar) so both extensions read as one band
-- **Colour-coded per group**: green below 50 %, yellow below 75 %, orange below 90 %, red at 90 % and above
+- **Colour on the bar only**: green below 50 %, yellow below 75 %, orange below 90 %, red at 90 % and above. Labels and readings follow `statusBar.foreground`, so they stay legible on light and dark themes alike
 - **Either side of the bar.** One setting moves all three groups from left to right and back, with no window reload
 - **Memory in GB to two decimals**, used against total, because "78 %" does not tell you whether the 4 GB you are about to allocate will fit
 - **Nothing shifts.** Values are padded to a fixed width with figure spaces, trailing so each reading sits the same distance from its bar, and going from 9% to 100% does not slide every group along the bar

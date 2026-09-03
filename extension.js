@@ -36,10 +36,11 @@ function shown(key) {
   return cfg().get('show' + key.charAt(0).toUpperCase() + key.slice(1)) !== false;
 }
 
-// VS Code insere une marge entre deux items de barre d'etat, et rien ne permet
-// de la reduire depuis une extension. Barre et valeur tiennent donc dans un
-// seul item pour qu'elles restent collees ; le libelle garde le sien, sinon il
-// prendrait lui aussi la couleur de charge.
+// Un item de barre d'etat ne porte qu'une seule couleur. La valeur vit donc
+// dans le sien : sans couleur explicite, VS Code lui applique
+// statusBar.foreground, qui suit le theme, sombre en theme clair et clair en
+// theme sombre. Seule la barre est teintee par la charge. Le prix a payer est
+// la marge que VS Code insere entre deux items, qu'aucune extension ne reduit.
 function drawGroup(key, pct, valueText, width, color) {
   const g = it[key];
   const withBar = cfg().get('showBars') !== false;
@@ -48,14 +49,10 @@ function drawGroup(key, pct, valueText, width, color) {
   if (!withBar && !withValue) { hideGroup(key); return; }
 
   seg(g.lbl, cfg().get('showLabels') !== false ? LABELS[key] : '', undefined);
-
-  const parts = [];
-  if (withBar) parts.push(m.bar(pct, width, FULL, EMPTY));
-  // Sans barre a droite de laquelle s'aligner, le remplissage de la valeur ne
-  // sert plus a rien et ajouterait une marge morte avant le groupe suivant.
-  if (withValue) parts.push(withBar ? valueText : valueText.replace(/ +$/, ''));
-  seg(g.bar, parts.join(' '), color);
-  g.val.hide();
+  seg(g.bar, withBar ? m.bar(pct, width, FULL, EMPTY) : '', color);
+  // Chaque item se dimensionne sur son contenu, donc le remplissage de largeur
+  // n'a plus rien a aligner et n'ajouterait que du vide avant le groupe suivant.
+  seg(g.val, withValue ? valueText.replace(/ +$/, '') : '', undefined);
 }
 
 function probeText(pct, state) {

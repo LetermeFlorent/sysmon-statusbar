@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2
+
+Values follow the theme instead of the load colour. A status bar item carries a
+single colour, so the reading now lives in its own item with no explicit colour,
+which makes VS Code apply `statusBar.foreground` to it: dark on a light theme,
+light on a dark one. Only the bar stays tinted by load. The trade-off is the
+margin VS Code inserts between items, which no extension can shrink.
+
 ## 0.2.1
 
 Percentages pad to three characters instead of four. Aligning on `100%` put two
