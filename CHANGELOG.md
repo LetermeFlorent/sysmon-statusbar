@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+Own icon, no longer borrowed from the sibling extension. Bar and value now share
+a single status bar item so nothing sits in the gap VS Code inserts between
+items.
+
 ## 0.1.0
 
 First release. Four indicators in the status bar: CPU load, GPU load, disk

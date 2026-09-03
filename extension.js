@@ -32,11 +32,15 @@ function hideGroup(key) {
   it[key].lbl.hide(); it[key].bar.hide(); it[key].val.hide();
 }
 
+// VS Code insere une marge entre deux items de barre d'etat, et rien ne permet
+// de la reduire depuis une extension. Barre et valeur tiennent donc dans un
+// seul item pour qu'elles restent collees ; le libelle garde le sien, sinon il
+// prendrait lui aussi la couleur de charge.
 function drawGroup(key, pct, valueText, width, color) {
   const g = it[key];
   seg(g.lbl, LABELS[key], undefined);
-  seg(g.bar, m.bar(pct, width, FULL, EMPTY), color);
-  seg(g.val, valueText, undefined);
+  seg(g.bar, m.bar(pct, width, FULL, EMPTY) + ' ' + valueText, color);
+  g.val.hide();
 }
 
 function probeText(pct, state) {
