@@ -20,7 +20,7 @@ CPU ▓▓▓░░░░░ 34%   GPU ▓░░░░░░░ 12%   RAM ▓▓
 
 - **Real progress bars**, drawn with an embedded icon font, sharing the exact glyphs and fill algorithm of [Claude Rate Limit Status Bar](https://github.com/LetermeFlorent/claude-ratelimit-statusbar) so both extensions read as one band
 - **Colour-coded per group**: green below 50 %, yellow below 75 %, orange below 90 %, red at 90 % and above
-- **Either side of the bar.** One setting moves all three groups from right to left and back, with no window reload
+- **Either side of the bar.** One setting moves all three groups from left to right and back, with no window reload
 - **Memory in GB to two decimals**, used against total, because "78 %" does not tell you whether the 4 GB you are about to allocate will fit
 - **Hover** for the processor model, core count, exact free memory and the age of the last GPU sample
 
@@ -50,7 +50,7 @@ No telemetry, no analytics, no network access of any kind. The extension reads t
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `sysmon.alignment` | `"right"` | Which side of the status bar to use, `left` or `right`. Applied without a reload |
+| `sysmon.alignment` | `"left"` | Which side of the status bar to use, `left` or `right`. Applied without a reload |
 | `sysmon.refreshSeconds` | `2` | Display refresh interval, in seconds (clamped to 1–60) |
 | `sysmon.barWidth` | `8` | Bar width, in cells (clamped to 4–20) |
 | `sysmon.showGpu` | `true` | Show the GPU group. `false` also stops the `typeperf` probe |

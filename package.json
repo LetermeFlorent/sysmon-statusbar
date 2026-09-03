@@ -76,7 +76,7 @@
 						"left",
 						"right"
 					],
-					"default": "right",
+					"default": "left",
 					"description": "Cote de la barre d'etat ou afficher les indicateurs."
 				},
 				"sysmon.showGpu": {
