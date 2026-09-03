@@ -6,6 +6,8 @@
 
 **Is it your build, or is it your machine?** CPU, GPU, disk and system memory as real coloured progress bars in the VS Code status bar, on whichever side you want them.
 
+![CPU, GPU, disk and memory in the VS Code status bar](https://raw.githubusercontent.com/LetermeFlorent/sysmon-statusbar/master/media/statusbar.png)
+
 ## The problem
 
 Something is slow, and you have no idea which resource ran out. Alt-tabbing to Task Manager tells you — three seconds later, about a moment that has already passed, in a window that now has focus and is itself skewing the reading. Meanwhile the monitors that do live in the editor tend to cost more than what they measure: one of them shells out to PowerShell on every refresh and burns nearly three seconds of wall time per tick to tell you your CPU is busy.
