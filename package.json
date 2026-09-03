@@ -1,0 +1,95 @@
+{
+	"name": "sysmon-statusbar",
+	"displayName": "System Monitor Status Bar",
+	"description": "Status bar display of CPU load, GPU load and system memory usage, as coloured progress bars with live values.",
+	"version": "0.1.0",
+	"publisher": "letermeflorent",
+	"license": "MIT",
+	"icon": "icon.png",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/LetermeFlorent/sysmon-statusbar.git"
+	},
+	"homepage": "https://github.com/LetermeFlorent/sysmon-statusbar#readme",
+	"bugs": {
+		"url": "https://github.com/LetermeFlorent/sysmon-statusbar/issues"
+	},
+	"keywords": [
+		"cpu",
+		"gpu",
+		"memory",
+		"monitor",
+		"status bar"
+	],
+	"engines": {
+		"vscode": "^1.75.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"activationEvents": [
+		"onStartupFinished"
+	],
+	"main": "./extension.js",
+	"extensionKind": [
+		"ui"
+	],
+	"contributes": {
+		"commands": [
+			{
+				"command": "sysmon.restartGpu",
+				"title": "System Monitor: Relancer la sonde GPU"
+			}
+		],
+		"icons": {
+			"sysmon-bar-full": {
+				"description": "Barre pleine",
+				"default": {
+					"fontPath": "./bar.woff",
+					"fontCharacter": "\\E000"
+				}
+			},
+			"sysmon-bar-empty": {
+				"description": "Barre vide",
+				"default": {
+					"fontPath": "./bar.woff",
+					"fontCharacter": "\\E001"
+				}
+			}
+		},
+		"configuration": {
+			"title": "System Monitor",
+			"properties": {
+				"sysmon.refreshSeconds": {
+					"type": "number",
+					"default": 2,
+					"description": "Intervalle de rafraichissement de l'affichage (secondes). Minimum 1, maximum 60."
+				},
+				"sysmon.barWidth": {
+					"type": "number",
+					"default": 8,
+					"description": "Largeur de chaque barre (cellules). Minimum 4, maximum 20."
+				},
+				"sysmon.alignment": {
+					"type": "string",
+					"enum": [
+						"left",
+						"right"
+					],
+					"default": "right",
+					"description": "Cote de la barre d'etat ou afficher les indicateurs."
+				},
+				"sysmon.showGpu": {
+					"type": "boolean",
+					"default": true,
+					"description": "Afficher le groupe GPU. Desactiver arrete aussi la sonde typeperf."
+				},
+				"sysmon.gpuRestartSeconds": {
+					"type": "number",
+					"default": 300,
+					"description": "Intervalle de recyclage de la sonde GPU (secondes). typeperf fige son jeu d'instances au demarrage, le recyclage permet de voir les nouveaux process."
+				}
+			}
+		}
+	}
+}
