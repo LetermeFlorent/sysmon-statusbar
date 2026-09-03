@@ -34,8 +34,22 @@ function formatGb(bytes) {
   return (Number(bytes) / GB).toFixed(2);
 }
 
+// U+2007 FIGURE SPACE a exactement la largeur d'un chiffre, contrairement a
+// l'espace ordinaire. Sans lui, passer de "9%" a "100%" elargit l'item et
+// decale tout ce qui suit dans la barre d'etat a chaque changement de palier.
+const PAD = ' ';
+
+function padNum(text, width) {
+  const s = String(text);
+  return s.length >= width ? s : PAD.repeat(width - s.length) + s;
+}
+
+function formatPercent(pct) {
+  return padNum(pct === null ? '--' : Math.round(pct) + '%', 4);
+}
+
 function formatRam(snap) {
-  return formatGb(snap.usedBytes) + ' / ' + formatGb(snap.totalBytes) + ' GB';
+  return padNum(formatGb(snap.usedBytes), 5) + ' / ' + formatGb(snap.totalBytes) + ' GB';
 }
 
 function colorFor(pct) {
@@ -65,5 +79,5 @@ function formatAge(ms) {
 
 module.exports = {
   clampInt, cpuSample, cpuPercent, ramSnapshot,
-  formatGb, formatRam, colorFor, bar, cpuInfo, formatAge
+  formatGb, formatRam, formatPercent, padNum, colorFor, bar, cpuInfo, formatAge
 };

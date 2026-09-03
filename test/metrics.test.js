@@ -38,6 +38,31 @@ test('formatRam assemble utilise, total et unite', () => {
   );
 });
 
+test('formatRam garde une largeur constante sous les 10 GB', () => {
+  const petit = m.formatRam({ usedBytes: 9663676416, totalBytes: 34084860723 });
+  const grand = m.formatRam({ usedBytes: 13262143488, totalBytes: 34084860723 });
+  assert.strictEqual(petit.length, grand.length);
+  assert.strictEqual(petit, '  9.00 / 31.74 GB'.replace('  ', ' '));
+});
+
+test('formatPercent rend toujours quatre caracteres', () => {
+  for (const v of [null, 0, 5, 34, 99, 100]) {
+    assert.strictEqual(m.formatPercent(v).length, 4, 'largeur cassee pour ' + v);
+  }
+  assert.strictEqual(m.formatPercent(100), '100%');
+  assert.strictEqual(m.formatPercent(null).slice(-2), '--');
+  assert.strictEqual(m.formatPercent(5).slice(-2), '5%');
+});
+
+test('formatPercent pade avec une chasse de chiffre, pas un espace ordinaire', () => {
+  assert.ok(m.formatPercent(5).indexOf(' ') < 0, 'espace ordinaire trouve');
+  assert.strictEqual(m.formatPercent(5)[0], ' ');
+});
+
+test('padNum ne tronque jamais une valeur trop longue', () => {
+  assert.strictEqual(m.padNum('123456', 4), '123456');
+});
+
 test('ramSnapshot rend un pourcentage coherent avec les octets', () => {
   const r = m.ramSnapshot();
   assert.ok(r.totalBytes > 0);

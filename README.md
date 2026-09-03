@@ -22,6 +22,7 @@ CPU ▓▓░░░ 34%   GPU ░░░░░ 12%   DISK ▓░░░░ 11%   R
 - **Colour-coded per group**: green below 50 %, yellow below 75 %, orange below 90 %, red at 90 % and above
 - **Either side of the bar.** One setting moves all three groups from left to right and back, with no window reload
 - **Memory in GB to two decimals**, used against total, because "78 %" does not tell you whether the 4 GB you are about to allocate will fit
+- **Nothing shifts.** Values are padded to a fixed width with figure spaces, so going from 9% to 100% does not slide every group along the bar
 - **Hover** for the processor model, core count, exact free memory and the age of the last GPU sample
 
 ## Where the numbers come from

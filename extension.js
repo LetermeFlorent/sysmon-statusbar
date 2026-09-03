@@ -39,13 +39,9 @@ function drawGroup(key, pct, valueText, width, color) {
   seg(g.val, valueText, undefined);
 }
 
-function loadText(pct) {
-  return pct === null ? '--' : Math.round(pct) + '%';
-}
-
 function probeText(pct, state) {
-  if (state === 'missing' || state === 'error') return 'n/a';
-  return loadText(pct);
+  if (state === 'missing' || state === 'error') return m.padNum('n/a', 4);
+  return m.formatPercent(pct);
 }
 
 function tipsFor(cpuPct, snap, ram) {
@@ -97,7 +93,7 @@ function render() {
   const cur = m.cpuSample();
   const cpuPct = prevCpu ? m.cpuPercent(prevCpu, cur) : null;
   prevCpu = cur;
-  drawGroup('cpu', cpuPct, loadText(cpuPct), w,
+  drawGroup('cpu', cpuPct, m.formatPercent(cpuPct), w,
     cpuPct === null ? GRAY : m.colorFor(cpuPct));
 
   const snap = probe ? probe.snapshot() : null;
