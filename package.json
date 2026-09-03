@@ -1,7 +1,7 @@
 {
 	"name": "sysmon-statusbar",
 	"displayName": "System Monitor Status Bar",
-	"description": "Status bar display of CPU load, GPU load and system memory usage, as coloured progress bars with live values.",
+	"description": "Status bar display of CPU, GPU, disk and system memory usage, as coloured progress bars with live values.",
 	"version": "0.1.0",
 	"publisher": "letermeflorent",
 	"license": "MIT",
@@ -17,6 +17,7 @@
 	"keywords": [
 		"cpu",
 		"gpu",
+		"disk",
 		"memory",
 		"monitor",
 		"status bar"
@@ -37,8 +38,8 @@
 	"contributes": {
 		"commands": [
 			{
-				"command": "sysmon.restartGpu",
-				"title": "System Monitor: Relancer la sonde GPU"
+				"command": "sysmon.restartProbe",
+				"title": "System Monitor: Relancer la sonde typeperf"
 			}
 		],
 		"icons": {
@@ -67,7 +68,7 @@
 				},
 				"sysmon.barWidth": {
 					"type": "number",
-					"default": 8,
+					"default": 5,
 					"description": "Largeur de chaque barre (cellules). Minimum 4, maximum 20."
 				},
 				"sysmon.alignment": {
@@ -82,12 +83,17 @@
 				"sysmon.showGpu": {
 					"type": "boolean",
 					"default": true,
-					"description": "Afficher le groupe GPU. Desactiver arrete aussi la sonde typeperf."
+					"description": "Afficher le groupe GPU, utilisation des moteurs 3D."
 				},
-				"sysmon.gpuRestartSeconds": {
+				"sysmon.showDisk": {
+					"type": "boolean",
+					"default": true,
+					"description": "Afficher le groupe DISK, activite du disque tous volumes confondus."
+				},
+				"sysmon.probeRestartSeconds": {
 					"type": "number",
 					"default": 300,
-					"description": "Intervalle de recyclage de la sonde GPU (secondes). typeperf fige son jeu d'instances au demarrage, le recyclage permet de voir les nouveaux process."
+					"description": "Intervalle de recyclage de la sonde typeperf (secondes). typeperf fige son jeu d'instances au demarrage, le recyclage permet de voir les nouveaux process."
 				}
 			}
 		}
