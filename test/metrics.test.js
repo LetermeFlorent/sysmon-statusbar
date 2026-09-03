@@ -46,19 +46,34 @@ test('formatRam garde une largeur constante sous les 10 GB', () => {
   assert.strictEqual(petit.slice(-1), ' ');
 });
 
-test('formatPercent rend toujours quatre caracteres', () => {
-  for (const v of [null, 0, 5, 34, 99, 100]) {
-    assert.strictEqual(m.formatPercent(v).length, 4, 'largeur cassee pour ' + v);
+test('formatPercent cale sur trois caracteres, sans tronquer 100%', () => {
+  for (const v of [null, 0, 5, 34, 99]) {
+    assert.strictEqual(m.formatPercent(v).length, 3, 'largeur cassee pour ' + v);
   }
   assert.strictEqual(m.formatPercent(100), '100%');
   assert.ok(m.formatPercent(null).startsWith('--'));
   assert.ok(m.formatPercent(5).startsWith('5%'));
 });
 
+test('formatPercent ne pade pas une valeur a deux chiffres', () => {
+  for (const v of [10, 45, 99]) {
+    assert.strictEqual(m.formatPercent(v).indexOf(' '), -1,
+      'espace de trop apres ' + v + '%');
+  }
+  assert.strictEqual(m.formatPercent(45), '45%');
+});
+
 test('formatPercent colle la valeur au debut, remplissage en queue', () => {
   assert.strictEqual(m.formatPercent(4)[0], '4', 'un chiffre doit ouvrir le texte');
   assert.strictEqual(m.formatPercent(4).slice(-1), ' ');
   assert.strictEqual(m.formatPercent(29).slice(0, 3), '29%');
+});
+
+test('formatPercent ne met jamais plus d une chasse de remplissage', () => {
+  for (const v of [null, 0, 5, 34, 99, 100]) {
+    const n = (m.formatPercent(v).match(/ /g) || []).length;
+    assert.ok(n <= 1, v + '% suivi de ' + n + ' chasses');
+  }
 });
 
 test('formatPercent pade avec une chasse de chiffre, pas un espace ordinaire', () => {

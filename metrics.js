@@ -48,8 +48,12 @@ function padNum(text, width) {
   return s.length >= width ? s : s + PAD.repeat(width - s.length);
 }
 
+// Largeur 3 et non 4 : caler sur "100%" ajouterait deux chasses apres "2%", ce
+// qui se cumule a la marge que VS Code met entre items et creuse un trou avant
+// le groupe suivant. A 3, seules les valeurs a un chiffre sont completees, et
+// 100% deborde d'un cran le temps qu'il dure.
 function formatPercent(pct) {
-  return padNum(pct === null ? '--' : Math.round(pct) + '%', 4);
+  return padNum(pct === null ? '--' : Math.round(pct) + '%', 3);
 }
 
 function formatRam(snap) {

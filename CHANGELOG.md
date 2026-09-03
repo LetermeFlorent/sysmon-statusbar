@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1
+
+Percentages pad to three characters instead of four. Aligning on `100%` put two
+figure spaces after a reading like `2%`, which stacked on top of the margin VS
+Code already inserts between items and left a visible hole before the next
+group. Only single-digit readings are padded now, and `100%` overflows by one
+cell for as long as it lasts.
+
 ## 0.2.0
 
 Every part of the display can now be turned off. `showCpu` and `showRam` join
