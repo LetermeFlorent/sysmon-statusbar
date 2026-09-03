@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0
+
+Every part of the display can now be turned off. `showCpu` and `showRam` join
+the existing `showGpu` and `showDisk`, and `showLabels`, `showBars` and
+`showValues` control the three pieces each group is made of. Turning off both
+GPU and disk still stops the `typeperf` process; turning off both bars and
+values hides the groups entirely rather than leaving bare labels behind.
+
 ## 0.1.2
 
 Padding moved to the end of each value. With it at the front, a short reading

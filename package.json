@@ -2,7 +2,7 @@
 	"name": "sysmon-statusbar",
 	"displayName": "System Monitor Status Bar",
 	"description": "Status bar display of CPU, GPU, disk and system memory usage, as coloured progress bars with live values.",
-	"version": "0.1.2",
+	"version": "0.2.0",
 	"publisher": "letermeflorent",
 	"license": "MIT",
 	"icon": "icon.png",
@@ -80,15 +80,40 @@
 					"default": "left",
 					"description": "Cote de la barre d'etat ou afficher les indicateurs."
 				},
+				"sysmon.showCpu": {
+					"type": "boolean",
+					"default": true,
+					"description": "Afficher le groupe CPU, charge moyenne de tous les coeurs logiques."
+				},
 				"sysmon.showGpu": {
 					"type": "boolean",
 					"default": true,
-					"description": "Afficher le groupe GPU, utilisation des moteurs 3D."
+					"description": "Afficher le groupe GPU, utilisation des moteurs 3D. Windows uniquement."
 				},
 				"sysmon.showDisk": {
 					"type": "boolean",
 					"default": true,
-					"description": "Afficher le groupe DISK, activite du disque tous volumes confondus."
+					"description": "Afficher le groupe DISK, activite du disque tous volumes confondus. Windows uniquement."
+				},
+				"sysmon.showRam": {
+					"type": "boolean",
+					"default": true,
+					"description": "Afficher le groupe RAM, memoire systeme utilisee sur memoire totale."
+				},
+				"sysmon.showLabels": {
+					"type": "boolean",
+					"default": true,
+					"description": "Afficher le libelle de chaque groupe (CPU, GPU, DISK, RAM)."
+				},
+				"sysmon.showBars": {
+					"type": "boolean",
+					"default": true,
+					"description": "Afficher la barre de progression de chaque groupe."
+				},
+				"sysmon.showValues": {
+					"type": "boolean",
+					"default": true,
+					"description": "Afficher la valeur chiffree de chaque groupe."
 				},
 				"sysmon.probeRestartSeconds": {
 					"type": "number",

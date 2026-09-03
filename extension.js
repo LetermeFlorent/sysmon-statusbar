@@ -32,14 +32,29 @@ function hideGroup(key) {
   it[key].lbl.hide(); it[key].bar.hide(); it[key].val.hide();
 }
 
+function shown(key) {
+  return cfg().get('show' + key.charAt(0).toUpperCase() + key.slice(1)) !== false;
+}
+
 // VS Code insere une marge entre deux items de barre d'etat, et rien ne permet
 // de la reduire depuis une extension. Barre et valeur tiennent donc dans un
 // seul item pour qu'elles restent collees ; le libelle garde le sien, sinon il
 // prendrait lui aussi la couleur de charge.
 function drawGroup(key, pct, valueText, width, color) {
   const g = it[key];
-  seg(g.lbl, LABELS[key], undefined);
-  seg(g.bar, m.bar(pct, width, FULL, EMPTY) + ' ' + valueText, color);
+  const withBar = cfg().get('showBars') !== false;
+  const withValue = cfg().get('showValues') !== false;
+
+  if (!withBar && !withValue) { hideGroup(key); return; }
+
+  seg(g.lbl, cfg().get('showLabels') !== false ? LABELS[key] : '', undefined);
+
+  const parts = [];
+  if (withBar) parts.push(m.bar(pct, width, FULL, EMPTY));
+  // Sans barre a droite de laquelle s'aligner, le remplissage de la valeur ne
+  // sert plus a rien et ajouterait une marge morte avant le groupe suivant.
+  if (withValue) parts.push(withBar ? valueText : valueText.replace(/ +$/, ''));
+  seg(g.bar, parts.join(' '), color);
   g.val.hide();
 }
 
@@ -97,15 +112,16 @@ function render() {
   const cur = m.cpuSample();
   const cpuPct = prevCpu ? m.cpuPercent(prevCpu, cur) : null;
   prevCpu = cur;
-  drawGroup('cpu', cpuPct, m.formatPercent(cpuPct), w,
-    cpuPct === null ? GRAY : m.colorFor(cpuPct));
+  if (shown('cpu')) {
+    drawGroup('cpu', cpuPct, m.formatPercent(cpuPct), w,
+      cpuPct === null ? GRAY : m.colorFor(cpuPct));
+  } else hideGroup('cpu');
 
   const snap = probe ? probe.snapshot() : null;
   const stale = !snap || snap.state !== 'ok' || (Date.now() - snap.ts > STALE_MS);
 
   for (const key of ['gpu', 'disk']) {
-    const shown = key === 'gpu' ? cfg().get('showGpu') !== false : cfg().get('showDisk') !== false;
-    if (!shown) { hideGroup(key); continue; }
+    if (!shown(key)) { hideGroup(key); continue; }
     const v = snap ? snap[key] : null;
     drawGroup(key, v === null ? 0 : v,
       probeText(v, snap && snap.state), w,
@@ -113,7 +129,9 @@ function render() {
   }
 
   const ram = m.ramSnapshot();
-  drawGroup('ram', ram.pct, m.formatRam(ram), w, m.colorFor(ram.pct));
+  if (shown('ram')) {
+    drawGroup('ram', ram.pct, m.formatRam(ram), w, m.colorFor(ram.pct));
+  } else hideGroup('ram');
 
   const tips = tipsFor(cpuPct, snap, ram);
   for (const key of GROUPS) {
@@ -130,7 +148,7 @@ function schedule() {
 }
 
 function syncProbe() {
-  const wanted = cfg().get('showGpu') !== false || cfg().get('showDisk') !== false;
+  const wanted = shown('gpu') || shown('disk');
   clearInterval(restartTimer);
   if (!wanted) {
     if (probe) { probe.stop(); probe = null; }

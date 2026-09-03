@@ -58,9 +58,28 @@ No telemetry, no analytics, no network access of any kind. The extension reads t
 | `sysmon.alignment` | `"left"` | Which side of the status bar to use, `left` or `right`. Applied without a reload |
 | `sysmon.refreshSeconds` | `2` | Display refresh interval, in seconds (clamped to 1–60) |
 | `sysmon.barWidth` | `5` | Bar width, in cells (clamped to 4–20) |
+| `sysmon.showCpu` | `true` | Show the CPU group |
 | `sysmon.showGpu` | `true` | Show the GPU group |
-| `sysmon.showDisk` | `true` | Show the DISK group. With `showGpu`, turning both off stops the `typeperf` probe |
+| `sysmon.showDisk` | `true` | Show the DISK group |
+| `sysmon.showRam` | `true` | Show the RAM group |
+| `sysmon.showLabels` | `true` | Show the `CPU` / `GPU` / `DISK` / `RAM` label of each group |
+| `sysmon.showBars` | `true` | Show the progress bar of each group |
+| `sysmon.showValues` | `true` | Show the numeric value of each group |
 | `sysmon.probeRestartSeconds` | `300` | Probe recycle interval, in seconds (minimum 60) |
+
+Turning off both `showGpu` and `showDisk` stops the `typeperf` probe entirely, so
+no process is spawned at all. Turning off both `showBars` and `showValues` hides
+every group, label included, since a lone label says nothing.
+
+Some combinations worth knowing:
+
+```
+everything on              CPU ▓▓░░░ 34%   GPU ░░░░░ 12%   RAM ▓▓░░░ 12.35 / 31.74 GB
+showLabels false           ▓▓░░░ 34%   ░░░░░ 12%   ▓▓░░░ 12.35 / 31.74 GB
+showBars false             CPU 34%   GPU 12%   RAM 12.35 / 31.74 GB
+showValues false           CPU ▓▓░░░   GPU ░░░░░   RAM ▓▓░░░
+showCpu/showGpu false      DISK ▓░░░░ 11%   RAM ▓▓░░░ 12.35 / 31.74 GB
+```
 
 ## Commands
 
