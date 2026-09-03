@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2
+
+Padding moved to the end of each value. With it at the front, a short reading
+like `4%` sat further from its bar than `100%` did from its own; now every value
+starts at the same distance from its bar and the alignment happens on the right.
+
 ## 0.1.1
 
 Own icon, no longer borrowed from the sibling extension. Bar and value now share

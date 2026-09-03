@@ -42,7 +42,8 @@ test('formatRam garde une largeur constante sous les 10 GB', () => {
   const petit = m.formatRam({ usedBytes: 9663676416, totalBytes: 34084860723 });
   const grand = m.formatRam({ usedBytes: 13262143488, totalBytes: 34084860723 });
   assert.strictEqual(petit.length, grand.length);
-  assert.strictEqual(petit, '  9.00 / 31.74 GB'.replace('  ', ' '));
+  assert.ok(petit.startsWith('9.00 / 31.74 GB'), 'la valeur doit commencer le texte');
+  assert.strictEqual(petit.slice(-1), ' ');
 });
 
 test('formatPercent rend toujours quatre caracteres', () => {
@@ -50,17 +51,27 @@ test('formatPercent rend toujours quatre caracteres', () => {
     assert.strictEqual(m.formatPercent(v).length, 4, 'largeur cassee pour ' + v);
   }
   assert.strictEqual(m.formatPercent(100), '100%');
-  assert.strictEqual(m.formatPercent(null).slice(-2), '--');
-  assert.strictEqual(m.formatPercent(5).slice(-2), '5%');
+  assert.ok(m.formatPercent(null).startsWith('--'));
+  assert.ok(m.formatPercent(5).startsWith('5%'));
+});
+
+test('formatPercent colle la valeur au debut, remplissage en queue', () => {
+  assert.strictEqual(m.formatPercent(4)[0], '4', 'un chiffre doit ouvrir le texte');
+  assert.strictEqual(m.formatPercent(4).slice(-1), ' ');
+  assert.strictEqual(m.formatPercent(29).slice(0, 3), '29%');
 });
 
 test('formatPercent pade avec une chasse de chiffre, pas un espace ordinaire', () => {
   assert.ok(m.formatPercent(5).indexOf(' ') < 0, 'espace ordinaire trouve');
-  assert.strictEqual(m.formatPercent(5)[0], ' ');
+  assert.strictEqual(m.formatPercent(5).slice(-1), ' ');
 });
 
 test('padNum ne tronque jamais une valeur trop longue', () => {
   assert.strictEqual(m.padNum('123456', 4), '123456');
+});
+
+test('padNum pade en queue et non en tete', () => {
+  assert.strictEqual(m.padNum('ab', 4), 'ab  ');
 });
 
 test('ramSnapshot rend un pourcentage coherent avec les octets', () => {

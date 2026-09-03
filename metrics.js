@@ -39,9 +39,13 @@ function formatGb(bytes) {
 // decale tout ce qui suit dans la barre d'etat a chaque changement de palier.
 const PAD = ' ';
 
+// Le remplissage va APRES la valeur, pas avant : la barre est a gauche, donc un
+// remplissage en tete eloignerait "4%" de sa barre plus que "100%" de la sienne.
+// En queue, chaque valeur commence a la meme distance de sa barre et c'est le
+// groupe suivant qui reste aligne.
 function padNum(text, width) {
   const s = String(text);
-  return s.length >= width ? s : PAD.repeat(width - s.length) + s;
+  return s.length >= width ? s : s + PAD.repeat(width - s.length);
 }
 
 function formatPercent(pct) {
@@ -49,7 +53,7 @@ function formatPercent(pct) {
 }
 
 function formatRam(snap) {
-  return padNum(formatGb(snap.usedBytes), 5) + ' / ' + formatGb(snap.totalBytes) + ' GB';
+  return padNum(formatGb(snap.usedBytes) + ' / ' + formatGb(snap.totalBytes) + ' GB', 16);
 }
 
 function colorFor(pct) {
