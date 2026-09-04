@@ -10,17 +10,22 @@ Something is slow, and you have no idea which resource ran out. Alt-tabbing to T
 
 ## What you get
 
-Four groups, always visible, updating on their own:
+CPU, GPU, memory and one group per disk, always visible, updating on their own:
 
 ```
-CPU ▓▓░░░ 34%   GPU ░░░░░ 12%   DISK ▓░░░░ 11%   RAM ▓▓░░░ 12.35 / 31.74 GB
+CPU ▓▓░░░ 34%   GPU ░░░░░ 12%   C: ▓▓░░░ 43%   D: ░░░░░ 8%   RAM ▓▓░░░ 12.35 / 31.74 GB
 ```
+
+Every disk gets its own group, labelled with its own name: volume letters on
+Windows, the device name on Linux (`sda`, `nvme0n1`). Which ones appear is up
+to you, through `System Monitor: Choisir les disques affiches` or the
+`diskDevices` setting.
 
 Bars are drawn with an embedded icon font, sharing the exact glyphs and fill algorithm of [Claude Rate Limit Status Bar](https://github.com/LetermeFlorent/claude-ratelimit-statusbar) so both extensions read as one band. Colour lives on the bar alone: green below 50 %, yellow below 75 %, orange below 90 %, red at 90 % and above. Labels and readings follow `statusBar.foreground`, which keeps them legible on light and dark themes alike.
 
 One setting moves every group from left to right and back, with no window reload. Memory is shown in GB to two decimals, used against total, because "78 %" does not tell you whether the 4 GB you are about to allocate will fit. Values are padded to a fixed width with figure spaces, trailing, so each reading sits the same distance from its bar and going from 9 % to 100 % does not slide the whole band along.
 
-Hovering gives the processor model, core count, exact free memory and the age of the last GPU sample. On DISK, you get the per-device breakdown and a link to choose which ones count.
+Hovering gives the processor model, core count, exact free memory and the age of the last GPU sample. Each disk group carries its full instance name, which the label shortens, and a link to pick which disks are shown.
 
 ## Where the numbers come from
 
@@ -73,9 +78,9 @@ No telemetry, no analytics, no network access of any kind. The extension reads t
 | `sysmon.barWidth` | `5` | Bar width, in cells (clamped to 4-20) |
 | `sysmon.showCpu` | `true` | Show the CPU group |
 | `sysmon.showGpu` | `true` | Show the GPU group |
-| `sysmon.showDisk` | `true` | Show the DISK group |
+| `sysmon.showDisk` | `true` | Show the disk groups, one per physical device |
 | `sysmon.showRam` | `true` | Show the RAM group |
-| `sysmon.diskDevices` | `[]` | Disks to count in the DISK value, by name (`"0 C:"` on Windows, `"sda"` on Linux). Empty means every disk, the default. Easiest to set through the `System Monitor: Choisir les disques affiches` command rather than typed by hand |
+| `sysmon.diskDevices` | `[]` | Disks to display, by name (`"0 C:"` on Windows, `"sda"` on Linux). Empty means every disk seen, so one plugged in later still shows up. Easiest to set through the `System Monitor: Choisir les disques affiches` command rather than typed by hand |
 | `sysmon.showLabels` | `true` | Show the `CPU` / `GPU` / `DISK` / `RAM` label of each group |
 | `sysmon.showBars` | `true` | Show the progress bar of each group |
 | `sysmon.showValues` | `true` | Show the numeric value of each group |

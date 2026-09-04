@@ -2,7 +2,7 @@
 	"name": "sysmon-statusbar",
 	"displayName": "System Monitor Status Bar",
 	"description": "Status bar display of CPU, GPU, disk and system memory usage, as coloured progress bars with live values.",
-	"version": "0.5.1",
+	"version": "0.6.0",
 	"publisher": "letermeflorent",
 	"license": "MIT",
 	"icon": "icon.png",
@@ -97,7 +97,7 @@
 				"sysmon.showDisk": {
 					"type": "boolean",
 					"default": true,
-					"description": "Afficher le groupe DISK, activite du disque tous volumes confondus. Windows et Linux ; non mesure sur macOS, qui n'expose pas de pourcentage d'occupation sans privileges."
+					"description": "Afficher les groupes disque, un par disque physique. Windows et Linux ; non mesure sur macOS, qui n'expose pas de pourcentage d'occupation sans privileges."
 				},
 				"sysmon.showRam": {
 					"type": "boolean",
@@ -110,7 +110,7 @@
 						"type": "string"
 					},
 					"default": [],
-					"description": "Disques a compter dans la valeur DISK (ex. [\"0 C:\"] sur Windows, [\"sda\"] sur Linux). Vide = tous, comportement par defaut. Se remplit facilement via la commande System Monitor: Choisir les disques affiches."
+					"description": "Disques affiches dans la barre d etat, un groupe par disque (ex. [\"0 C:\"] sur Windows, [\"sda\"] sur Linux). Vide = tous les disques vus. Se remplit facilement via la commande System Monitor: Choisir les disques affiches."
 				},
 				"sysmon.showLabels": {
 					"type": "boolean",

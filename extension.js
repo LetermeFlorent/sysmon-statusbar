@@ -31,9 +31,6 @@ const EMPTY = '$(sysmon-bar-empty)';
 const GRAY = '#8a8a8a';
 const STALE_MS = 30000;
 
-// Ordre d'affichage, de gauche a droite. La priorite decroit de 3 par groupe
-// parce qu'un groupe occupe trois items : libelle, barre, valeur.
-const GROUPS = ['cpu', 'gpu', 'disk', 'ram'];
 const LABELS = { cpu: 'CPU', gpu: 'GPU', disk: 'DISK', ram: 'RAM' };
 
 const it = {};
@@ -42,7 +39,53 @@ let restartTimer = null;
 let prevCpu = null;
 let probe = null;
 let currentAlignment = null;
+let currentKeys = '';
+let ctx = null;
 let lastTips = 0;
+
+// Windows nomme ses instances "0 C:" ou "1 D: E:", le numero de disque suivi
+// des lettres de volume. Seules les lettres parlent a la lecture.
+function shortDiskName(name) {
+  const mm = /^\d+\s+(.+)$/.exec(String(name || ''));
+  return mm ? mm[1] : String(name || '');
+}
+
+function diskKey(name) { return 'disk:' + name; }
+
+function isDiskKey(key) { return key.indexOf('disk:') === 0; }
+
+function diskOf(key) { return key.slice(5); }
+
+function labelFor(key) {
+  return isDiskKey(key) ? shortDiskName(diskOf(key)) : LABELS[key];
+}
+
+function knownDisks(snap) {
+  return snap && snap.disks ? Object.keys(snap.disks).sort() : [];
+}
+
+// Liste vide dans les reglages = tous les disques, ce qui evite qu'un disque
+// branche plus tard passe inapercu. Une liste non vide est prise au mot, y
+// compris quand elle ne laisse rien : c'est un choix, pas un oubli.
+function visibleDisks(conf, snap) {
+  const all = knownDisks(snap);
+  if (!conf.diskDevices.length) return all;
+  return all.filter(function (n) { return conf.diskDevices.indexOf(n) >= 0; });
+}
+
+// Ordre d'affichage, de gauche a droite. Un groupe par disque, et un groupe
+// DISK en attente tant que la sonde n'a encore rien remonte.
+function groupKeys(conf, snap) {
+  const keys = [];
+  if (conf.show.cpu) keys.push('cpu');
+  if (conf.show.gpu) keys.push('gpu');
+  if (conf.show.disk) {
+    if (!knownDisks(snap).length) keys.push('disk');
+    else for (const n of visibleDisks(conf, snap)) keys.push(diskKey(n));
+  }
+  if (conf.show.ram) keys.push('ram');
+  return keys;
+}
 
 function cfg() { return vscode.workspace.getConfiguration('sysmon'); }
 
@@ -82,6 +125,7 @@ function readCfg() {
     showBars: c.get('showBars') !== false,
     showValues: c.get('showValues') !== false,
     diskDevices: c.get('diskDevices') || [],
+    alignment: c.get('alignment') === 'right' ? 'right' : 'left',
     tooltipMs: Math.max(1, Number(c.get('tooltipSeconds')) || 5) * 1000,
     show: {
       cpu: c.get('showCpu') !== false,
@@ -104,7 +148,7 @@ function drawGroup(key, pct, valueText, color, conf) {
 
   if (!withBar && !withValue) { hideGroup(key); return; }
 
-  seg(g.lbl, conf.showLabels ? LABELS[key] : '', undefined);
+  seg(g.lbl, conf.showLabels ? labelFor(key) : '', undefined);
   seg(g.bar, withBar ? m.bar(pct, conf.barWidth, FULL, EMPTY) : '', color);
   // Le remplissage reste en place. Un item se dimensionne sur son contenu, donc
   // le retirer fait passer la valeur de deux a quatre chasses entre "9%" et
@@ -157,74 +201,85 @@ function tipsFor(cpuPct, snap, ram, conf) {
     return md;
   };
 
-  const diskSelectedPct = snap ? m.selectedDiskPercent(snap.disks, snap.disk, conf.diskDevices) : null;
-  const diskMd = mk('Disque', diskSelectedPct, DISK_SOURCE);
-  const names = snap && snap.disks ? Object.keys(snap.disks).sort() : [];
-  const selected = conf.diskDevices;
-  if (names.length) {
-    diskMd.appendMarkdown('\n\n**Detail par disque**\n\n');
-    for (const name of names) {
-      const cocher = !selected.length || selected.includes(name);
-      diskMd.appendMarkdown((cocher ? '**' : '') + name + ' : ' + snap.disks[name].toFixed(1) + ' %' + (cocher ? '**' : '') + '\n\n');
-    }
-    diskMd.isTrusted = true;
-    diskMd.appendMarkdown('[$(list-selection) Choisir les disques](command:sysmon.pickDisks)');
-  }
+  const names = knownDisks(snap);
+  const shown = visibleDisks(conf, snap);
 
-  return {
+  const withPicker = function (md) {
+    if (!names.length) return md;
+    md.appendMarkdown('\n\nDisques vus : ' + names.map(shortDiskName).join(', ') + '\n\n');
+    md.isTrusted = true;
+    md.appendMarkdown('[$(list-selection) Choisir les disques affiches](command:sysmon.pickDisks)');
+    return md;
+  };
+
+  const tips = {
     cpu: cpuMd,
     ram: ramMd,
-    gpu: mk('GPU', snap ? snap.gpu : null, GPU_SOURCE),
-    disk: diskMd
+    gpu: mk('GPU', snap ? snap.gpu : null, GPU_SOURCE)
   };
+
+  // Un disque, un tooltip : le nom complet de l'instance y figure, alors que le
+  // libelle de la barre d'etat n'en garde que les lettres de volume.
+  for (const name of shown) {
+    const v = snap && snap.disks && typeof snap.disks[name] === 'number' ? snap.disks[name] : null;
+    tips[diskKey(name)] = withPicker(mk('Disque ' + name, v, DISK_SOURCE));
+  }
+  if (!names.length) tips.disk = withPicker(mk('Disque', null, DISK_SOURCE));
+
+  return tips;
 }
 
 function render() {
-  if (!it.cpu) return;
   const conf = readCfg();
+  const snap = probe ? probe.snapshot() : null;
+  syncGroups(conf, snap);
   const now = Date.now();
 
   const cur = m.cpuSample();
   const cpuPct = prevCpu ? m.cpuPercent(prevCpu, cur) : null;
   prevCpu = cur;
-  if (conf.show.cpu) {
+  if (it.cpu) {
     drawGroup('cpu', cpuPct, m.formatPercent(cpuPct),
       cpuPct === null ? GRAY : m.colorFor(cpuPct), conf);
-  } else hideGroup('cpu');
+  }
 
-  const snap = probe ? probe.snapshot() : null;
   // Un redemarrage de sonde repasse par l'etat 'starting' : tant que le dernier
   // echantillon date de moins de STALE_MS, il reste valable et il n'y a aucune
   // raison de faire clignoter les barres en gris.
   const fresh = !!(snap && snap.ts && now - snap.ts <= STALE_MS);
   const stale = !fresh || snap.state === 'missing' || snap.state === 'error';
 
-  for (const key of ['gpu', 'disk']) {
-    if (!conf.show[key]) { hideGroup(key); continue; }
-    const v = !snap ? null : (key === 'disk'
-      ? m.selectedDiskPercent(snap.disks, snap.disk, conf.diskDevices)
-      : snap.gpu);
+  if (it.gpu) {
+    const v = snap ? snap.gpu : null;
+    drawGroup('gpu', v === null ? 0 : v,
+      probeText(v, snap && snap.state),
+      (stale || v === null) ? GRAY : m.colorFor(v), conf);
+  }
+
+  for (const key in it) {
+    if (key !== 'disk' && !isDiskKey(key)) continue;
+    const raw = key === 'disk' || !snap || !snap.disks ? null : snap.disks[diskOf(key)];
+    const v = typeof raw === 'number' ? raw : null;
     drawGroup(key, v === null ? 0 : v,
       probeText(v, snap && snap.state),
       (stale || v === null) ? GRAY : m.colorFor(v), conf);
   }
 
   const ram = m.ramSnapshot();
-  if (conf.show.ram) {
-    drawGroup('ram', ram.pct, m.formatRam(ram), m.colorFor(ram.pct), conf);
-  } else hideGroup('ram');
+  if (it.ram) drawGroup('ram', ram.pct, m.formatRam(ram), m.colorFor(ram.pct), conf);
 
   // Un tooltip n'est lu qu'au survol et VS Code ne le rafraichit pas pendant
-  // qu'il est affiche : le reconstruire a chaque tick revient a jeter quatre
+  // qu'il est affiche : le reconstruire a chaque tick revient a jeter des
   // MarkdownString par seconde pour rien.
   if (now - lastTips < conf.tooltipMs) return;
   lastTips = now;
   const tips = tipsFor(cpuPct, snap, ram, conf);
-  for (const key of GROUPS) {
-    if (!conf.show[key]) continue;
-    it[key].lbl.tooltip = tips[key];
-    it[key].bar.tooltip = tips[key];
-    it[key].val.tooltip = tips[key];
+  for (const key in it) {
+    const t = tips[key];
+    if (!t) continue;
+    it[key].lbl.tooltip = t;
+    it[key].bar.tooltip = t;
+    it[key].val.tooltip = t;
   }
 }
 
@@ -274,26 +329,31 @@ function disposeItems() {
   }
 }
 
-function buildItems(context) {
-  const want = cfg().get('alignment') === 'right' ? 'right' : 'left';
-  if (currentAlignment === want) return;
-  currentAlignment = want;
+// Les items sont recrees uniquement quand la liste des groupes change, donc a
+// l'arrivee d'un disque, a un decochage ou a un changement de cote. Un
+// StatusBarItem ne peut changer ni de cote ni de priorite apres coup.
+function syncGroups(conf, snap) {
+  const want = groupKeys(conf, snap);
+  const sig = want.join('|');
+  if (sig === currentKeys && conf.alignment === currentAlignment) return;
+  currentKeys = sig;
+  currentAlignment = conf.alignment;
 
   disposeItems();
 
-  const align = want === 'right'
+  const align = conf.alignment === 'right'
     ? vscode.StatusBarAlignment.Right
     : vscode.StatusBarAlignment.Left;
 
-  const mk = function (prio) {
-    const s = vscode.window.createStatusBarItem(align, prio);
-    context.subscriptions.push(s);
-    return s;
-  };
-
+  // La priorite decroit de 3 par groupe parce qu'un groupe occupe trois items :
+  // libelle, barre, valeur.
   let prio = 100;
-  for (const key of GROUPS) {
-    it[key] = { lbl: mk(prio), bar: mk(prio - 1), val: mk(prio - 2) };
+  for (const key of want) {
+    it[key] = {
+      lbl: vscode.window.createStatusBarItem(align, prio),
+      bar: vscode.window.createStatusBarItem(align, prio - 1),
+      val: vscode.window.createStatusBarItem(align, prio - 2)
+    };
     prio -= 3;
   }
 }
@@ -312,17 +372,23 @@ function activate(context) {
       return;
     }
     const current = cfg().get('diskDevices') || [];
-    const items = names.map((name) => ({ label: name, picked: !current.length || current.includes(name) }));
+    const items = names.map((name) => ({
+      label: shortDiskName(name),
+      description: name === shortDiskName(name) ? '' : name,
+      name: name,
+      picked: !current.length || current.includes(name)
+    }));
     const picked = await vscode.window.showQuickPick(items, {
       canPickMany: true,
-      placeHolder: 'Disques a compter dans la valeur DISK (tout coche = tous, comportement par defaut)'
+      placeHolder: 'Disques affiches dans la barre d\'etat, un groupe par disque coche'
     });
     if (picked === undefined) return;
-    const chosen = picked.map((i) => i.label);
+    const chosen = picked.map((i) => i.name);
     // Tout laisser coche revient au mode par defaut (tableau vide), plutot que
     // de figer la liste actuelle : un disque branche plus tard reste couvert.
     const value = chosen.length === names.length ? [] : chosen;
     await cfg().update('diskDevices', value, vscode.ConfigurationTarget.Global);
+    render();
   }));
 
   context.subscriptions.push(vscode.window.onDidChangeWindowState(function () {
@@ -333,7 +399,6 @@ function activate(context) {
 
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(function (e) {
     if (!e.affectsConfiguration('sysmon')) return;
-    if (e.affectsConfiguration('sysmon.alignment')) buildItems(context);
     if (e.affectsConfiguration('sysmon.showGpu') ||
       e.affectsConfiguration('sysmon.showDisk') ||
       e.affectsConfiguration('sysmon.refreshSeconds') ||
@@ -347,10 +412,10 @@ function activate(context) {
       clearInterval(timer);
       clearInterval(restartTimer);
       if (probe) { probe.stop(); probe = null; }
+      disposeItems();
     }
   });
 
-  buildItems(context);
   syncProbe();
   render();
   schedule();
@@ -364,4 +429,4 @@ function deactivate() {
   currentAlignment = null;
 }
 
-module.exports = { activate, deactivate };
+module.exports = { activate, deactivate, shortDiskName, visibleDisks, groupKeys, labelFor };

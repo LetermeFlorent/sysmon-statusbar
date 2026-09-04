@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.0
+
+Disks get one group each, labelled with their own name rather than a single
+`DISK` reading. Windows shows the volume letters (`C:`, `D: E:`), Linux the
+device (`sda`, `nvme0n1`). The `DISK` label only remains while the probe has
+not reported anything yet.
+
+`diskDevices` changes meaning accordingly: it now lists the disks to display,
+not the ones to fold into one aggregate figure. An empty list still means every
+disk, so one plugged in later shows up on its own, and `System Monitor:
+Choisir les disques affiches` ticks them off one by one. Unticking all of them
+leaves no disk group at all, which is a decision rather than an oversight.
+
+Status bar items are rebuilt only when the list of groups actually changes, so
+a disk appearing or a box being unticked costs one rebuild, not one per tick.
+
 ## 0.5.1
 
 Readings no longer change width, so nothing slides along the status bar when a
