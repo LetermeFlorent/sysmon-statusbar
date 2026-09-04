@@ -3,12 +3,28 @@ const vscode = require('vscode');
 const m = require('./metrics');
 const { Probe: WindowsProbe } = require('./probe');
 const { LinuxProbe } = require('./linux');
+const { MacProbe } = require('./mac');
 
 const IS_WINDOWS = os.platform() === 'win32';
+const IS_MAC = os.platform() === 'darwin';
 
 function createProbe(interval) {
-  return IS_WINDOWS ? new WindowsProbe(interval) : new LinuxProbe(interval);
+  if (IS_WINDOWS) return new WindowsProbe(interval);
+  if (IS_MAC) return new MacProbe(interval);
+  return new LinuxProbe(interval);
 }
+
+const GPU_SOURCE = IS_WINDOWS
+  ? 'compteur Windows GPU Engine, moteurs de type 3D'
+  : IS_MAC
+    ? 'ioreg, statistiques de l\'accelerateur graphique'
+    : 'sysfs gpu_busy_percent, ou nvidia-smi si disponible';
+
+const DISK_SOURCE = IS_WINDOWS
+  ? 'compteur Windows PhysicalDisk, un par disque'
+  : IS_MAC
+    ? 'indisponible sur macOS sans privileges : aucun pourcentage d\'occupation n\'est expose'
+    : '/proc/diskstats, un disque par device';
 
 const FULL = '$(sysmon-bar-full)';
 const EMPTY = '$(sysmon-bar-empty)';
@@ -26,22 +42,54 @@ let restartTimer = null;
 let prevCpu = null;
 let probe = null;
 let currentAlignment = null;
+let lastTips = 0;
 
 function cfg() { return vscode.workspace.getConfiguration('sysmon'); }
 
+// Chaque ecriture sur un StatusBarItem traverse le pont vers le process
+// d'interface. Les libelles ne changent jamais et une barre ne bouge qu'au
+// passage d'un palier : sans ce garde, tout est repousse deux fois par seconde
+// pour un rendu identique.
 function seg(item, text, color) {
-  if (!text) { item.hide(); return; }
-  item.text = text;
-  item.color = color;
-  item.show();
+  if (!text) {
+    if (item._on !== false) { item.hide(); item._on = false; }
+    return;
+  }
+  if (item._text !== text) { item.text = text; item._text = text; }
+  if (item._color !== color) { item.color = color; item._color = color; }
+  if (item._on !== true) { item.show(); item._on = true; }
+}
+
+function hideItem(item) {
+  if (item._on !== false) { item.hide(); item._on = false; }
 }
 
 function hideGroup(key) {
-  it[key].lbl.hide(); it[key].bar.hide(); it[key].val.hide();
+  hideItem(it[key].lbl); hideItem(it[key].bar); hideItem(it[key].val);
 }
 
 function shown(key) {
   return cfg().get('show' + key.charAt(0).toUpperCase() + key.slice(1)) !== false;
+}
+
+// Une vingtaine de getConfiguration par tick sinon, en cascade a travers
+// shown() et drawGroup().
+function readCfg() {
+  const c = cfg();
+  return {
+    barWidth: m.clampInt(c.get('barWidth'), 4, 20),
+    showLabels: c.get('showLabels') !== false,
+    showBars: c.get('showBars') !== false,
+    showValues: c.get('showValues') !== false,
+    diskDevices: c.get('diskDevices') || [],
+    tooltipMs: Math.max(1, Number(c.get('tooltipSeconds')) || 5) * 1000,
+    show: {
+      cpu: c.get('showCpu') !== false,
+      gpu: c.get('showGpu') !== false,
+      disk: c.get('showDisk') !== false,
+      ram: c.get('showRam') !== false
+    }
+  };
 }
 
 // Un item de barre d'etat ne porte qu'une seule couleur. La valeur vit donc
@@ -49,15 +97,15 @@ function shown(key) {
 // statusBar.foreground, qui suit le theme, sombre en theme clair et clair en
 // theme sombre. Seule la barre est teintee par la charge. Le prix a payer est
 // la marge que VS Code insere entre deux items, qu'aucune extension ne reduit.
-function drawGroup(key, pct, valueText, width, color) {
+function drawGroup(key, pct, valueText, color, conf) {
   const g = it[key];
-  const withBar = cfg().get('showBars') !== false;
-  const withValue = cfg().get('showValues') !== false;
+  const withBar = conf.showBars;
+  const withValue = conf.showValues;
 
   if (!withBar && !withValue) { hideGroup(key); return; }
 
-  seg(g.lbl, cfg().get('showLabels') !== false ? LABELS[key] : '', undefined);
-  seg(g.bar, withBar ? m.bar(pct, width, FULL, EMPTY) : '', color);
+  seg(g.lbl, conf.showLabels ? LABELS[key] : '', undefined);
+  seg(g.bar, withBar ? m.bar(pct, conf.barWidth, FULL, EMPTY) : '', color);
   // Chaque item se dimensionne sur son contenu, donc le remplissage de largeur
   // n'a plus rien a aligner et n'ajouterait que du vide avant le groupe suivant.
   seg(g.val, withValue ? valueText.replace(/ +$/, '') : '', undefined);
@@ -68,7 +116,7 @@ function probeText(pct, state) {
   return m.formatPercent(pct);
 }
 
-function tipsFor(cpuPct, snap, ram) {
+function tipsFor(cpuPct, snap, ram, conf) {
   const ci = m.cpuInfo();
   const cpuMd = new vscode.MarkdownString(undefined, true);
   cpuMd.appendMarkdown('**Processeur**\n\n');
@@ -96,6 +144,8 @@ function tipsFor(cpuPct, snap, ram) {
         ? 'La sonde typeperf s\'est arretee.\n\n'
         : 'La sonde s\'est arretee.\n\n');
     } else if (value === null) {
+      if (IS_MAC && title === 'Disque') md.appendMarkdown('Non mesure sur macOS.\n\n');
+      else
       md.appendMarkdown('Premier echantillon en attente.\n\n');
     } else {
       md.appendMarkdown(value.toFixed(1) + ' %\n\n');
@@ -106,12 +156,10 @@ function tipsFor(cpuPct, snap, ram) {
     return md;
   };
 
-  const diskSelectedPct = snap ? m.selectedDiskPercent(snap.disks, snap.disk, cfg().get('diskDevices')) : null;
-  const diskMd = mk('Disque', diskSelectedPct, IS_WINDOWS
-    ? 'compteur Windows PhysicalDisk, un par disque'
-    : '/proc/diskstats, un disque par device');
+  const diskSelectedPct = snap ? m.selectedDiskPercent(snap.disks, snap.disk, conf.diskDevices) : null;
+  const diskMd = mk('Disque', diskSelectedPct, DISK_SOURCE);
   const names = snap && snap.disks ? Object.keys(snap.disks).sort() : [];
-  const selected = cfg().get('diskDevices') || [];
+  const selected = conf.diskDevices;
   if (names.length) {
     diskMd.appendMarkdown('\n\n**Detail par disque**\n\n');
     for (const name of names) {
@@ -125,45 +173,54 @@ function tipsFor(cpuPct, snap, ram) {
   return {
     cpu: cpuMd,
     ram: ramMd,
-    gpu: mk('GPU', snap ? snap.gpu : null, IS_WINDOWS
-      ? 'compteur Windows GPU Engine, moteurs de type 3D'
-      : 'sysfs gpu_busy_percent, ou nvidia-smi si disponible'),
+    gpu: mk('GPU', snap ? snap.gpu : null, GPU_SOURCE),
     disk: diskMd
   };
 }
 
 function render() {
   if (!it.cpu) return;
-  const w = m.clampInt(cfg().get('barWidth'), 4, 20);
+  const conf = readCfg();
+  const now = Date.now();
 
   const cur = m.cpuSample();
   const cpuPct = prevCpu ? m.cpuPercent(prevCpu, cur) : null;
   prevCpu = cur;
-  if (shown('cpu')) {
-    drawGroup('cpu', cpuPct, m.formatPercent(cpuPct), w,
-      cpuPct === null ? GRAY : m.colorFor(cpuPct));
+  if (conf.show.cpu) {
+    drawGroup('cpu', cpuPct, m.formatPercent(cpuPct),
+      cpuPct === null ? GRAY : m.colorFor(cpuPct), conf);
   } else hideGroup('cpu');
 
   const snap = probe ? probe.snapshot() : null;
-  const stale = !snap || snap.state !== 'ok' || (Date.now() - snap.ts > STALE_MS);
+  // Un redemarrage de sonde repasse par l'etat 'starting' : tant que le dernier
+  // echantillon date de moins de STALE_MS, il reste valable et il n'y a aucune
+  // raison de faire clignoter les barres en gris.
+  const fresh = !!(snap && snap.ts && now - snap.ts <= STALE_MS);
+  const stale = !fresh || snap.state === 'missing' || snap.state === 'error';
 
   for (const key of ['gpu', 'disk']) {
-    if (!shown(key)) { hideGroup(key); continue; }
+    if (!conf.show[key]) { hideGroup(key); continue; }
     const v = !snap ? null : (key === 'disk'
-      ? m.selectedDiskPercent(snap.disks, snap.disk, cfg().get('diskDevices'))
+      ? m.selectedDiskPercent(snap.disks, snap.disk, conf.diskDevices)
       : snap.gpu);
     drawGroup(key, v === null ? 0 : v,
-      probeText(v, snap && snap.state), w,
-      (stale || v === null) ? GRAY : m.colorFor(v));
+      probeText(v, snap && snap.state),
+      (stale || v === null) ? GRAY : m.colorFor(v), conf);
   }
 
   const ram = m.ramSnapshot();
-  if (shown('ram')) {
-    drawGroup('ram', ram.pct, m.formatRam(ram), w, m.colorFor(ram.pct));
+  if (conf.show.ram) {
+    drawGroup('ram', ram.pct, m.formatRam(ram), m.colorFor(ram.pct), conf);
   } else hideGroup('ram');
 
-  const tips = tipsFor(cpuPct, snap, ram);
+  // Un tooltip n'est lu qu'au survol et VS Code ne le rafraichit pas pendant
+  // qu'il est affiche : le reconstruire a chaque tick revient a jeter quatre
+  // MarkdownString par seconde pour rien.
+  if (now - lastTips < conf.tooltipMs) return;
+  lastTips = now;
+  const tips = tipsFor(cpuPct, snap, ram, conf);
   for (const key of GROUPS) {
+    if (!conf.show[key]) continue;
     it[key].lbl.tooltip = tips[key];
     it[key].bar.tooltip = tips[key];
     it[key].val.tooltip = tips[key];
@@ -172,14 +229,28 @@ function render() {
 
 function schedule() {
   const s = m.clampInt(cfg().get('refreshSeconds'), 1, 60);
+  const mult = (pauseAllowed() && !focused())
+    ? Math.max(1, Number(cfg().get('unfocusedMultiplier')) || 1)
+    : 1;
   clearInterval(timer);
-  timer = setInterval(render, s * 1000);
+  timer = setInterval(render, s * 1000 * mult);
+}
+
+// Chaque fenetre VS Code fait tourner sa propre sonde, donc trois fenetres
+// ouvertes mesurent trois fois la meme machine. Suspendre celle des fenetres
+// au second plan ramene ce cout a une seule sonde active.
+function focused() {
+  return !(vscode.window.state && vscode.window.state.focused === false);
+}
+
+function pauseAllowed() {
+  return cfg().get('pauseWhenUnfocused') !== false;
 }
 
 function syncProbe() {
   const wanted = shown('gpu') || shown('disk');
   clearInterval(restartTimer);
-  if (!wanted) {
+  if (!wanted || (pauseAllowed() && !focused())) {
     if (probe) { probe.stop(); probe = null; }
     return;
   }
@@ -251,6 +322,12 @@ function activate(context) {
     // de figer la liste actuelle : un disque branche plus tard reste couvert.
     const value = chosen.length === names.length ? [] : chosen;
     await cfg().update('diskDevices', value, vscode.ConfigurationTarget.Global);
+  }));
+
+  context.subscriptions.push(vscode.window.onDidChangeWindowState(function () {
+    syncProbe();
+    schedule();
+    render();
   }));
 
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(function (e) {

@@ -89,9 +89,16 @@ function selectedDiskPercent(disks, fallback, selected) {
   return max;
 }
 
+// Le modele et le nombre de coeurs ne changent pas d'une session a l'autre, et
+// os.cpus() alloue un objet par thread logique a chaque appel.
+let cpuInfoCache = null;
+
 function cpuInfo() {
-  const c = os.cpus();
-  return { model: (c[0] && c[0].model || 'inconnu').trim(), cores: c.length };
+  if (!cpuInfoCache) {
+    const c = os.cpus();
+    cpuInfoCache = { model: (c[0] && c[0].model || 'inconnu').trim(), cores: c.length };
+  }
+  return cpuInfoCache;
 }
 
 function formatAge(ms) {

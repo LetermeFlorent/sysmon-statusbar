@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.5.0
+
+Nothing is written to the status bar unless it actually changed. Labels never
+change and a bar only moves when it crosses a fill step, yet every item was
+being pushed twice a second for an identical result; each write crosses the
+bridge to the UI process.
+
+Tooltips are rebuilt on their own schedule, five seconds by default through the
+new `tooltipSeconds` setting, instead of once per tick. VS Code does not
+refresh a tooltip while it is on screen, so four `MarkdownString` per tick were
+built for nobody. Tooltips of hidden groups are no longer built at all, the
+processor model is read once instead of on every tick, and the whole
+configuration is read once per render rather than a couple of dozen times
+through nested calls.
+
+macOS is a supported platform rather than a Linux probe that silently fails on
+missing `/proc`. GPU comes from `ioreg`, trying `AGXAccelerator` then
+`IOAccelerator` so Apple Silicon and Intel are both covered. Disk stays
+unmeasured and displays `n/a`: macOS exposes no occupancy percentage without
+privileges, and deriving a fake one from throughput would be worse than
+admitting it. This probe has not been validated on real hardware.
+
+New `pauseWhenUnfocused` setting, on by default, stops the GPU and disk probe
+while the window sits in the background. Three open windows used to mean three
+processes measuring the same machine. `unfocusedMultiplier` slows the refresh
+down in the same situation.
+
+A probe restart no longer flashes the bars grey. Going through the `starting`
+state does not invalidate a sample that is under thirty seconds old.
+
 ## 0.4.0
 
 DISK now reports one number per physical device on hover, not just the
@@ -7,7 +37,7 @@ aggregate shown in the status bar: Windows queries every `PhysicalDisk`
 instance instead of only `_Total`, Linux reads every whole device from
 `/proc/diskstats` instead of keeping only the busiest one. A new command,
 `System Monitor: Choisir les disques affiches`, checklists the disks seen so
-far and lets you narrow the DISK value to a subset — leaving everything
+far and lets you narrow the DISK value to a subset, and leaving everything
 checked keeps the previous behaviour.
 
 ## 0.3.0

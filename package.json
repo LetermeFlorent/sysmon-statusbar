@@ -2,7 +2,7 @@
 	"name": "sysmon-statusbar",
 	"displayName": "System Monitor Status Bar",
 	"description": "Status bar display of CPU, GPU, disk and system memory usage, as coloured progress bars with live values.",
-	"version": "0.4.0",
+	"version": "0.5.0",
 	"publisher": "letermeflorent",
 	"license": "MIT",
 	"icon": "icon.png",
@@ -92,12 +92,12 @@
 				"sysmon.showGpu": {
 					"type": "boolean",
 					"default": true,
-					"description": "Afficher le groupe GPU, utilisation des moteurs 3D. Windows uniquement."
+					"description": "Afficher le groupe GPU, utilisation des moteurs 3D. Windows via typeperf, Linux via sysfs ou nvidia-smi, macOS via ioreg."
 				},
 				"sysmon.showDisk": {
 					"type": "boolean",
 					"default": true,
-					"description": "Afficher le groupe DISK, activite du disque tous volumes confondus. Windows uniquement."
+					"description": "Afficher le groupe DISK, activite du disque tous volumes confondus. Windows et Linux ; non mesure sur macOS, qui n'expose pas de pourcentage d'occupation sans privileges."
 				},
 				"sysmon.showRam": {
 					"type": "boolean",
@@ -131,6 +131,21 @@
 					"type": "number",
 					"default": 300,
 					"description": "Intervalle de recyclage de la sonde GPU/disque (secondes). Sur Windows, typeperf fige son jeu d'instances au demarrage ; le recyclage permet de voir les nouveaux process. Sur Linux, le recyclage relance la detection du GPU (utile si un pilote se charge apres coup)."
+				},
+				"sysmon.tooltipSeconds": {
+					"type": "number",
+					"default": 5,
+					"description": "Intervalle de reconstruction des infobulles (secondes). VS Code ne rafraichit pas une infobulle affichee, donc la recalculer a chaque tick ne sert a rien."
+				},
+				"sysmon.pauseWhenUnfocused": {
+					"type": "boolean",
+					"default": true,
+					"description": "Arreter la sonde GPU/disque quand la fenetre n'a pas le focus. Evite qu'une sonde tourne par fenetre ouverte ; l'affichage reprend au retour au premier plan."
+				},
+				"sysmon.unfocusedMultiplier": {
+					"type": "number",
+					"default": 4,
+					"description": "Facteur applique a l'intervalle de rafraichissement quand la fenetre n'a pas le focus. Sans effet si pauseWhenUnfocused est desactive."
 				}
 			}
 		}
