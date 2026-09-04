@@ -2,7 +2,7 @@
 	"name": "sysmon-statusbar",
 	"displayName": "System Monitor Status Bar",
 	"description": "Status bar display of CPU, GPU, disk and system memory usage, as coloured progress bars with live values.",
-	"version": "0.6.0",
+	"version": "0.7.0",
 	"publisher": "letermeflorent",
 	"license": "MIT",
 	"icon": "icon.png",
@@ -137,15 +137,20 @@
 					"default": 5,
 					"description": "Intervalle de reconstruction des infobulles (secondes). VS Code ne rafraichit pas une infobulle affichee, donc la recalculer a chaque tick ne sert a rien."
 				},
-				"sysmon.pauseWhenUnfocused": {
+				"sysmon.shareProbe": {
 					"type": "boolean",
 					"default": true,
-					"description": "Arreter la sonde GPU/disque quand la fenetre n'a pas le focus. Evite qu'une sonde tourne par fenetre ouverte ; l'affichage reprend au retour au premier plan."
+					"description": "Partager une seule sonde entre toutes les fenetres VS Code, via un fichier de bail dans le dossier temporaire. Une fenetre mesure, les autres lisent son resultat."
+				},
+				"sysmon.pauseWhenUnfocused": {
+					"type": "boolean",
+					"default": false,
+					"description": "Arreter la sonde quand la fenetre n'a pas le focus. VS Code ne sait pas dire si une fenetre est visible, seulement si elle est active : une fenetre affichee sur un second ecran se retrouve donc grisee. Le partage de sonde rend ce reglage inutile dans la plupart des cas."
 				},
 				"sysmon.unfocusedMultiplier": {
 					"type": "number",
-					"default": 4,
-					"description": "Facteur applique a l'intervalle de rafraichissement quand la fenetre n'a pas le focus. Sans effet si pauseWhenUnfocused est desactive."
+					"default": 1,
+					"description": "Facteur applique a l'intervalle de rafraichissement quand la fenetre n'a pas le focus. 1 garde la meme cadence partout, ce qui evite qu'une fenetre visible sur un second ecran traine derriere."
 				}
 			}
 		}

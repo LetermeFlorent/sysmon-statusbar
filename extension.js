@@ -1,4 +1,6 @@
 const os = require('node:os');
+const fs = require('node:fs');
+const path = require('node:path');
 const vscode = require('vscode');
 const m = require('./metrics');
 const { Probe: WindowsProbe } = require('./probe');
@@ -88,6 +90,58 @@ function groupKeys(conf, snap) {
 }
 
 function cfg() { return vscode.workspace.getConfiguration('sysmon'); }
+
+// Chaque fenetre VS Code a son propre extension host, donc trois fenetres
+// ouvertes lancaient trois sondes sur les memes compteurs. Une seule detient le
+// bail et mesure, les autres relisent son resultat : la machine n'est sondee
+// qu'une fois et aucune fenetre n'affiche de valeur grisee pour autant.
+const SHARE_FILE = path.join(os.tmpdir(), 'sysmon-probe-share.json');
+const LEASE_MS = 8000;
+const OWNER_ID = String(process.pid) + '-' + Math.random().toString(36).slice(2, 8);
+
+let leaseHeld = false;
+
+function readShare() {
+  try { return JSON.parse(fs.readFileSync(SHARE_FILE, 'utf8')); } catch (_) { return null; }
+}
+
+function writeShare(o) {
+  try { fs.writeFileSync(SHARE_FILE, JSON.stringify(o)); } catch (_) { /* temp en lecture seule */ }
+}
+
+function shareEnabled() { return cfg().get('shareProbe') !== false; }
+
+// Le bail se prend quand personne ne le tient ou qu'il a expire, ce qui couvre
+// la fermeture brutale de la fenetre qui mesurait.
+function claimLease(now) {
+  const s = readShare();
+  return !s || !s.owner || !s.lease || s.lease < now || s.owner === OWNER_ID;
+}
+
+function publishShare(snap, now) {
+  writeShare({
+    owner: OWNER_ID,
+    lease: now + LEASE_MS,
+    ts: snap.ts,
+    state: snap.state,
+    gpu: snap.gpu,
+    disk: snap.disk,
+    disks: snap.disks || {}
+  });
+}
+
+function sharedSnapshot() {
+  const s = readShare();
+  if (!s || !s.ts) return null;
+  return { gpu: s.gpu, disk: s.disk, disks: s.disks || {}, ts: s.ts, state: s.state || 'ok' };
+}
+
+function releaseShare() {
+  if (!leaseHeld) return;
+  const s = readShare();
+  if (s && s.owner === OWNER_ID) writeShare(Object.assign({}, s, { owner: null, lease: 0 }));
+  leaseHeld = false;
+}
 
 // Chaque ecriture sur un StatusBarItem traverse le pont vers le process
 // d'interface. Les libelles ne changent jamais et une barre ne bouge qu'au
@@ -229,11 +283,31 @@ function tipsFor(cpuPct, snap, ram, conf) {
   return tips;
 }
 
+// Decide a chaque tick si cette fenetre mesure ou se contente de lire, puis
+// rend l'instantane a afficher. Le proprietaire du bail publie le sien, les
+// autres relisent le fichier partage.
+function pumpProbe(conf, now) {
+  if (!conf.show.gpu && !conf.show.disk) return probe ? probe.snapshot() : null;
+  if (!shareEnabled()) {
+    if (!leaseHeld) { leaseHeld = true; syncProbe(); }
+    return probe ? probe.snapshot() : null;
+  }
+  const want = claimLease(now);
+  if (want !== leaseHeld) {
+    leaseHeld = want;
+    syncProbe();
+  }
+  if (!leaseHeld) return sharedSnapshot();
+  const snap = probe ? probe.snapshot() : null;
+  if (snap) publishShare(snap, now);
+  return snap;
+}
+
 function render() {
   const conf = readCfg();
-  const snap = probe ? probe.snapshot() : null;
-  syncGroups(conf, snap);
   const now = Date.now();
+  const snap = pumpProbe(conf, now);
+  syncGroups(conf, snap);
 
   const cur = m.cpuSample();
   const cpuPct = prevCpu ? m.cpuPercent(prevCpu, cur) : null;
@@ -285,28 +359,25 @@ function render() {
 
 function schedule() {
   const s = m.clampInt(cfg().get('refreshSeconds'), 1, 60);
-  const mult = (pauseAllowed() && !focused())
-    ? Math.max(1, Number(cfg().get('unfocusedMultiplier')) || 1)
-    : 1;
+  const mult = focused()
+    ? 1
+    : Math.max(1, Number(cfg().get('unfocusedMultiplier')) || 1);
   clearInterval(timer);
   timer = setInterval(render, s * 1000 * mult);
 }
 
-// Chaque fenetre VS Code fait tourner sa propre sonde, donc trois fenetres
-// ouvertes mesurent trois fois la meme machine. Suspendre celle des fenetres
-// au second plan ramene ce cout a une seule sonde active.
 function focused() {
   return !(vscode.window.state && vscode.window.state.focused === false);
 }
 
 function pauseAllowed() {
-  return cfg().get('pauseWhenUnfocused') !== false;
+  return cfg().get('pauseWhenUnfocused') === true;
 }
 
 function syncProbe() {
   const wanted = shown('gpu') || shown('disk');
   clearInterval(restartTimer);
-  if (!wanted || (pauseAllowed() && !focused())) {
+  if (!wanted || (pauseAllowed() && !focused()) || !leaseHeld) {
     if (probe) { probe.stop(); probe = null; }
     return;
   }
@@ -412,6 +483,7 @@ function activate(context) {
       clearInterval(timer);
       clearInterval(restartTimer);
       if (probe) { probe.stop(); probe = null; }
+      releaseShare();
       disposeItems();
     }
   });
@@ -425,8 +497,14 @@ function deactivate() {
   clearInterval(timer);
   clearInterval(restartTimer);
   if (probe) { probe.stop(); probe = null; }
+  releaseShare();
   disposeItems();
   currentAlignment = null;
+  currentKeys = '';
 }
 
-module.exports = { activate, deactivate, shortDiskName, visibleDisks, groupKeys, labelFor };
+module.exports = {
+  activate, deactivate,
+  shortDiskName, visibleDisks, groupKeys, labelFor,
+  claimLease, publishShare, sharedSnapshot, releaseShare, SHARE_FILE, OWNER_ID
+};

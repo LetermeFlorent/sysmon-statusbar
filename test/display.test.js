@@ -117,6 +117,44 @@ test('la sonde macOS ne remonte aucun disque, le groupe DISK reste seul', () => 
   assert.deepStrictEqual(ext.groupKeys(conf(), snap), ['cpu', 'gpu', 'disk', 'ram']);
 });
 
+test('le bail est libre tant que personne ne l a pris', () => {
+  const fs = require('node:fs');
+  try { fs.rmSync(ext.SHARE_FILE); } catch (_) { /* deja absent */ }
+  assert.strictEqual(ext.claimLease(Date.now()), true);
+});
+
+test('le bail publie se rend au proprietaire et a lui seul', () => {
+  const now = Date.now();
+  ext.publishShare({ gpu: 42, disk: 7, disks: { 'sda': 7 }, ts: now, state: 'ok' }, now);
+  assert.strictEqual(ext.claimLease(now), true, 'son propre bail reste le sien');
+
+  const fs = require('node:fs');
+  const s = JSON.parse(fs.readFileSync(ext.SHARE_FILE, 'utf8'));
+  s.owner = 'une-autre-fenetre';
+  fs.writeFileSync(ext.SHARE_FILE, JSON.stringify(s));
+  assert.strictEqual(ext.claimLease(now), false, 'le bail d autrui ne se prend pas');
+  assert.strictEqual(ext.claimLease(s.lease + 1), true, 'un bail expire se reprend');
+});
+
+test('l instantane partage rend les mesures publiees', () => {
+  const now = Date.now();
+  ext.publishShare({ gpu: 42, disk: 7, disks: { 'sda': 7 }, ts: now, state: 'ok' }, now);
+  const snap = ext.sharedSnapshot();
+  assert.strictEqual(snap.gpu, 42);
+  assert.deepStrictEqual(snap.disks, { 'sda': 7 });
+  assert.strictEqual(snap.ts, now);
+  assert.deepStrictEqual(ext.groupKeys(conf(), snap), ['cpu', 'gpu', 'disk:sda', 'ram']);
+});
+
+test('un partage absent ou vide ne rend aucun instantane', () => {
+  const fs = require('node:fs');
+  try { fs.rmSync(ext.SHARE_FILE); } catch (_) { /* deja absent */ }
+  assert.strictEqual(ext.sharedSnapshot(), null);
+  fs.writeFileSync(ext.SHARE_FILE, 'pas du json');
+  assert.strictEqual(ext.sharedSnapshot(), null);
+  try { fs.rmSync(ext.SHARE_FILE); } catch (_) { /* deja absent */ }
+});
+
 test('une sonde Windows ou Linux fraiche part elle aussi sur DISK', () => {
   const { Probe } = require('../probe');
   const { LinuxProbe } = require('../linux');

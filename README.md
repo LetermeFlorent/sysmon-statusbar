@@ -63,7 +63,7 @@ The display only writes to the status bar when something actually changed. Label
 
 Tooltips are rebuilt on their own schedule, five seconds by default, rather than once per tick. VS Code does not refresh a tooltip while it is being hovered, so rebuilding four of them every two seconds served nobody.
 
-While a window sits in the background its probe is stopped and its refresh slowed down. Without that, three open windows meant three processes measuring the same machine. Set `pauseWhenUnfocused` to `false` if you keep an eye on the bar in a window that does not have focus.
+Only one window measures. The others read what it published, through a lease file in the temp directory, so three open windows cost one probe instead of three while all three keep showing live values. If the window holding the lease closes, another takes over; if it is killed outright, the lease expires after eight seconds. Set `shareProbe` to `false` to give every window its own probe.
 
 ## Privacy
 
@@ -86,8 +86,9 @@ No telemetry, no analytics, no network access of any kind. The extension reads t
 | `sysmon.showValues` | `true` | Show the numeric value of each group |
 | `sysmon.probeRestartSeconds` | `300` | Probe recycle interval, in seconds (minimum 60) |
 | `sysmon.tooltipSeconds` | `5` | How often tooltips are rebuilt, in seconds |
-| `sysmon.pauseWhenUnfocused` | `true` | Stop the GPU and disk probe while the window has no focus |
-| `sysmon.unfocusedMultiplier` | `4` | Refresh interval multiplier while the window has no focus |
+| `sysmon.shareProbe` | `true` | Share a single probe across every VS Code window |
+| `sysmon.pauseWhenUnfocused` | `false` | Stop the probe while the window has no focus. VS Code cannot tell a hidden window from a visible inactive one, so this greys out windows on a second screen |
+| `sysmon.unfocusedMultiplier` | `1` | Refresh interval multiplier while the window has no focus |
 
 Turning off both `showGpu` and `showDisk` stops the probe entirely, so on Windows no `typeperf` process is spawned, and on Linux with an NVIDIA card no `nvidia-smi` invocation happens. Turning off both `showBars` and `showValues` hides every group, label included, since a lone label says nothing.
 
@@ -120,7 +121,7 @@ A group greyed out with a stale number means no sample has arrived for thirty se
 
 CPU sitting at `--` is only expected on the very first tick. If it persists, the refresh timer is not firing: check that `sysmon.refreshSeconds` is a number and not a string.
 
-Each VS Code window runs its own extension host, so each has its own probe. Since 0.5.0 the probe stops while a window is in the background, which in practice leaves one active probe at a time. Turning off both `sysmon.showGpu` and `sysmon.showDisk` in the windows where you do not need them spawns no process at all.
+Each VS Code window runs its own extension host, but since 0.7.0 they share one probe through a lease file, so only one of them actually measures. Turning off both `sysmon.showGpu` and `sysmon.showDisk` spawns no process at all.
 
 ## License
 

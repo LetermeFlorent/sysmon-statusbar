@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.7.0
+
+One probe for the whole machine, shared between every open window through a
+lease file in the temp directory. One window measures and publishes, the others
+read what it published. Three windows now cost one probe instead of three, and
+every one of them shows live values.
+
+This replaces the approach 0.5.0 took, which stopped the probe of any window
+without focus. VS Code cannot tell a hidden window from a visible one that
+simply is not active, so a window sitting on a second screen went grey while
+being perfectly visible. `pauseWhenUnfocused` still exists but now defaults to
+off, and `unfocusedMultiplier` defaults to 1 for the same reason.
+
+When the window holding the lease closes, the lease is released; if it is
+killed outright, the lease expires on its own after eight seconds and another
+window picks the measuring up.
+
 ## 0.6.0
 
 Disks get one group each, labelled with their own name rather than a single
