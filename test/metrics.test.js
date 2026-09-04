@@ -46,21 +46,21 @@ test('formatRam garde une largeur constante sous les 10 GB', () => {
   assert.strictEqual(petit.slice(-1), ' ');
 });
 
-test('formatPercent cale sur trois caracteres, sans tronquer 100%', () => {
-  for (const v of [null, 0, 5, 34, 99]) {
-    assert.strictEqual(m.formatPercent(v).length, 3, 'largeur cassee pour ' + v);
+test('formatPercent cale toutes les valeurs sur la largeur de 100%', () => {
+  for (const v of [null, 0, 5, 34, 99, 100]) {
+    assert.strictEqual(m.formatPercent(v).length, 4, 'largeur cassee pour ' + v);
   }
   assert.strictEqual(m.formatPercent(100), '100%');
   assert.ok(m.formatPercent(null).startsWith('--'));
   assert.ok(m.formatPercent(5).startsWith('5%'));
 });
 
-test('formatPercent ne pade pas une valeur a deux chiffres', () => {
+test('formatPercent complete une valeur a deux chiffres d une seule chasse', () => {
   for (const v of [10, 45, 99]) {
-    assert.strictEqual(m.formatPercent(v).indexOf(' '), -1,
-      'espace de trop apres ' + v + '%');
+    const n = (m.formatPercent(v).match(new RegExp(' ', 'g')) || []).length;
+    assert.strictEqual(n, 1, 'remplissage inattendu apres ' + v + '%');
   }
-  assert.strictEqual(m.formatPercent(45), '45%');
+  assert.strictEqual(m.formatPercent(45), '45%' + ' ');
 });
 
 test('formatPercent colle la valeur au debut, remplissage en queue', () => {
@@ -69,11 +69,16 @@ test('formatPercent colle la valeur au debut, remplissage en queue', () => {
   assert.strictEqual(m.formatPercent(29).slice(0, 3), '29%');
 });
 
-test('formatPercent ne met jamais plus d une chasse de remplissage', () => {
+test('formatPercent ne met jamais plus de deux chasses de remplissage', () => {
   for (const v of [null, 0, 5, 34, 99, 100]) {
     const n = (m.formatPercent(v).match(/ /g) || []).length;
-    assert.ok(n <= 1, v + '% suivi de ' + n + ' chasses');
+    assert.ok(n <= 2, v + '% suivi de ' + n + ' chasses');
   }
+});
+
+test('la largeur de la valeur ne bouge pas entre deux paliers', () => {
+  const w = new Set([0, 9, 10, 99, 100].map((v) => m.formatPercent(v).length));
+  assert.strictEqual(w.size, 1, 'largeurs distinctes: ' + [...w].join(','));
 });
 
 test('formatPercent pade avec une chasse de chiffre, pas un espace ordinaire', () => {

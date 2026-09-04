@@ -106,9 +106,10 @@ function drawGroup(key, pct, valueText, color, conf) {
 
   seg(g.lbl, conf.showLabels ? LABELS[key] : '', undefined);
   seg(g.bar, withBar ? m.bar(pct, conf.barWidth, FULL, EMPTY) : '', color);
-  // Chaque item se dimensionne sur son contenu, donc le remplissage de largeur
-  // n'a plus rien a aligner et n'ajouterait que du vide avant le groupe suivant.
-  seg(g.val, withValue ? valueText.replace(/ +$/, '') : '', undefined);
+  // Le remplissage reste en place. Un item se dimensionne sur son contenu, donc
+  // le retirer fait passer la valeur de deux a quatre chasses entre "9%" et
+  // "100%", et tout ce qui suit dans la barre d'etat se decale a chaque palier.
+  seg(g.val, withValue ? valueText : '', undefined);
 }
 
 function probeText(pct, state) {

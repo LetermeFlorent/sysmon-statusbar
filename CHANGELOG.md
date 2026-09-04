@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.1
+
+Readings no longer change width, so nothing slides along the status bar when a
+value crosses a step. The padding that existed for exactly that reason was
+being stripped right before display, which let a reading swing between two and
+four cells on its way from `9%` to `100%`. Percentages are now padded to the
+width of `100%`, and memory to the width its own total will always occupy,
+which keeps a 128 GB machine as steady as a 16 GB one.
+
+This reverses the 0.2.1 trade-off knowingly: a reading like `2%` now carries
+two trailing figure spaces. A little air before the next group costs less than
+a band that shifts every few seconds.
+
 ## 0.5.0
 
 Nothing is written to the status bar unless it actually changed. Labels never

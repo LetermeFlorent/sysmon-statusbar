@@ -2,7 +2,7 @@
 	"name": "sysmon-statusbar",
 	"displayName": "System Monitor Status Bar",
 	"description": "Status bar display of CPU, GPU, disk and system memory usage, as coloured progress bars with live values.",
-	"version": "0.5.0",
+	"version": "0.5.1",
 	"publisher": "letermeflorent",
 	"license": "MIT",
 	"icon": "icon.png",
