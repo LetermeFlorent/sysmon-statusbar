@@ -60,6 +60,22 @@ test('diskPercent plafonne a cent', () => {
   assert.strictEqual(l.diskPercent(prev, 0, cur, 1000), 100);
 });
 
+test('diskPercents rend le pourcentage de chaque disque, pas seulement le max', () => {
+  const prev = { sda: 150, nvme0n1: 600 };
+  const cur = { sda: 650, nvme0n1: 700 };
+  assert.deepStrictEqual(l.diskPercents(prev, 0, cur, 1000), { sda: 50, nvme0n1: 10 });
+});
+
+test('diskPercents omet un disque absent d un des deux releves', () => {
+  const prev = { sda: 100 };
+  const cur = { sda: 200, nvme0n1: 50 };
+  assert.deepStrictEqual(l.diskPercents(prev, 0, cur, 1000), { sda: 10 });
+});
+
+test('diskPercents rend un objet vide sans intervalle de temps positif', () => {
+  assert.deepStrictEqual(l.diskPercents({ sda: 1 }, 1000, { sda: 2 }, 1000), {});
+});
+
 test('parseNvidiaSmiOutput additionne les lignes numeriques', () => {
   assert.strictEqual(l.parseNvidiaSmiOutput('13\n27\n'), 40);
   assert.strictEqual(l.parseNvidiaSmiOutput('45'), 45);

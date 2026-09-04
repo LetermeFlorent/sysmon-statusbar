@@ -106,15 +106,29 @@ function tipsFor(cpuPct, snap, ram) {
     return md;
   };
 
+  const diskSelectedPct = snap ? m.selectedDiskPercent(snap.disks, snap.disk, cfg().get('diskDevices')) : null;
+  const diskMd = mk('Disque', diskSelectedPct, IS_WINDOWS
+    ? 'compteur Windows PhysicalDisk, un par disque'
+    : '/proc/diskstats, un disque par device');
+  const names = snap && snap.disks ? Object.keys(snap.disks).sort() : [];
+  const selected = cfg().get('diskDevices') || [];
+  if (names.length) {
+    diskMd.appendMarkdown('\n\n**Detail par disque**\n\n');
+    for (const name of names) {
+      const cocher = !selected.length || selected.includes(name);
+      diskMd.appendMarkdown((cocher ? '**' : '') + name + ' : ' + snap.disks[name].toFixed(1) + ' %' + (cocher ? '**' : '') + '\n\n');
+    }
+    diskMd.isTrusted = true;
+    diskMd.appendMarkdown('[$(list-selection) Choisir les disques](command:sysmon.pickDisks)');
+  }
+
   return {
     cpu: cpuMd,
     ram: ramMd,
     gpu: mk('GPU', snap ? snap.gpu : null, IS_WINDOWS
       ? 'compteur Windows GPU Engine, moteurs de type 3D'
       : 'sysfs gpu_busy_percent, ou nvidia-smi si disponible'),
-    disk: mk('Disque', snap ? snap.disk : null, IS_WINDOWS
-      ? 'compteur Windows PhysicalDisk, temps d\'activite tous volumes'
-      : '/proc/diskstats, disque le plus charge')
+    disk: diskMd
   };
 }
 
@@ -135,7 +149,9 @@ function render() {
 
   for (const key of ['gpu', 'disk']) {
     if (!shown(key)) { hideGroup(key); continue; }
-    const v = snap ? snap[key] : null;
+    const v = !snap ? null : (key === 'disk'
+      ? m.selectedDiskPercent(snap.disks, snap.disk, cfg().get('diskDevices'))
+      : snap.gpu);
     drawGroup(key, v === null ? 0 : v,
       probeText(v, snap && snap.state), w,
       (stale || v === null) ? GRAY : m.colorFor(v));
@@ -214,6 +230,27 @@ function activate(context) {
   context.subscriptions.push(vscode.commands.registerCommand('sysmon.restartProbe', function () {
     if (probe) probe.restart(); else syncProbe();
     render();
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('sysmon.pickDisks', async function () {
+    const snap = probe ? probe.snapshot() : null;
+    const names = snap && snap.disks ? Object.keys(snap.disks).sort() : [];
+    if (!names.length) {
+      vscode.window.showInformationMessage('Aucun disque detecte pour l\'instant. Patientez quelques secondes puis reessayez.');
+      return;
+    }
+    const current = cfg().get('diskDevices') || [];
+    const items = names.map((name) => ({ label: name, picked: !current.length || current.includes(name) }));
+    const picked = await vscode.window.showQuickPick(items, {
+      canPickMany: true,
+      placeHolder: 'Disques a compter dans la valeur DISK (tout coche = tous, comportement par defaut)'
+    });
+    if (picked === undefined) return;
+    const chosen = picked.map((i) => i.label);
+    // Tout laisser coche revient au mode par defaut (tableau vide), plutot que
+    // de figer la liste actuelle : un disque branche plus tard reste couvert.
+    const value = chosen.length === names.length ? [] : chosen;
+    await cfg().update('diskDevices', value, vscode.ConfigurationTarget.Global);
   }));
 
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(function (e) {

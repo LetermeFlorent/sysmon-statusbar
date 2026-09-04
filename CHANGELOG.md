@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0
+
+DISK now reports one number per physical device on hover, not just the
+aggregate shown in the status bar: Windows queries every `PhysicalDisk`
+instance instead of only `_Total`, Linux reads every whole device from
+`/proc/diskstats` instead of keeping only the busiest one. A new command,
+`System Monitor: Choisir les disques affiches`, checklists the disks seen so
+far and lets you narrow the DISK value to a subset — leaving everything
+checked keeps the previous behaviour.
+
 ## 0.3.0
 
 GPU and disk now work on Linux, not just Windows. Disk reads `/proc/diskstats`

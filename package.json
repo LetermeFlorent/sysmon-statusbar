@@ -2,7 +2,7 @@
 	"name": "sysmon-statusbar",
 	"displayName": "System Monitor Status Bar",
 	"description": "Status bar display of CPU, GPU, disk and system memory usage, as coloured progress bars with live values.",
-	"version": "0.3.0",
+	"version": "0.4.0",
 	"publisher": "letermeflorent",
 	"license": "MIT",
 	"icon": "icon.png",
@@ -40,6 +40,10 @@
 			{
 				"command": "sysmon.restartProbe",
 				"title": "System Monitor: Relancer la sonde GPU/disque"
+			},
+			{
+				"command": "sysmon.pickDisks",
+				"title": "System Monitor: Choisir les disques affiches"
 			}
 		],
 		"icons": {
@@ -99,6 +103,14 @@
 					"type": "boolean",
 					"default": true,
 					"description": "Afficher le groupe RAM, memoire systeme utilisee sur memoire totale."
+				},
+				"sysmon.diskDevices": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": [],
+					"description": "Disques a compter dans la valeur DISK (ex. [\"0 C:\"] sur Windows, [\"sda\"] sur Linux). Vide = tous, comportement par defaut. Se remplit facilement via la commande System Monitor: Choisir les disques affiches."
 				},
 				"sysmon.showLabels": {
 					"type": "boolean",

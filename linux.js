@@ -26,19 +26,29 @@ function parseDiskStats(text) {
   return devices;
 }
 
-function diskPercent(prev, prevTs, cur, curTs) {
+// Pourcentage d'activite par disque entre deux lectures de /proc/diskstats.
+// Un disque absent d'un des deux releves (branche/debranche entre-temps) est
+// simplement omis plutot que de fausser le calcul.
+function diskPercents(prev, prevTs, cur, curTs) {
   const dtWall = curTs - prevTs;
-  if (dtWall <= 0) return null;
-  let max = null;
+  if (dtWall <= 0) return {};
+  const out = {};
   for (const name in cur) {
     if (!(name in prev)) continue;
     const dMs = cur[name] - prev[name];
     if (dMs < 0) continue;
-    const pct = dMs / dtWall * 100;
-    if (max === null || pct > max) max = pct;
+    out[name] = Math.max(0, Math.min(100, dMs / dtWall * 100));
   }
-  if (max === null) return null;
-  return Math.max(0, Math.min(100, max));
+  return out;
+}
+
+function diskPercent(prev, prevTs, cur, curTs) {
+  const all = diskPercents(prev, prevTs, cur, curTs);
+  let max = null;
+  for (const name in all) {
+    if (max === null || all[name] > max) max = all[name];
+  }
+  return max;
 }
 
 function readDiskStats() {
@@ -101,6 +111,7 @@ class LinuxProbe {
     this.timer = null;
     this.gpu = null;
     this.disk = null;
+    this.disks = {};
     this.ts = 0;
     this.state = 'starting';
     this.gpuMethod = null;
@@ -125,8 +136,14 @@ class LinuxProbe {
       const cur = readDiskStats();
       const curTs = Date.now();
       if (this.prevDisk) {
-        const pct = diskPercent(this.prevDisk, this.prevDiskTs, cur, curTs);
-        if (pct !== null) { this.disk = pct; diskOk = true; }
+        const all = diskPercents(this.prevDisk, this.prevDiskTs, cur, curTs);
+        let max = null;
+        for (const name in all) { if (max === null || all[name] > max) max = all[name]; }
+        if (max !== null) {
+          this.disks = all;
+          this.disk = max;
+          diskOk = true;
+        }
       }
       this.prevDisk = cur;
       this.prevDiskTs = curTs;
@@ -165,11 +182,11 @@ class LinuxProbe {
 
   restart() { this.stop(); this.start(); }
 
-  snapshot() { return { gpu: this.gpu, disk: this.disk, ts: this.ts, state: this.state }; }
+  snapshot() { return { gpu: this.gpu, disk: this.disk, disks: this.disks, ts: this.ts, state: this.state }; }
 }
 
 module.exports = {
-  isWholeDisk, parseDiskStats, diskPercent, readDiskStats,
+  isWholeDisk, parseDiskStats, diskPercent, diskPercents, readDiskStats,
   findGpuSysfsPaths, readGpuSysfs, hasNvidiaSmi, parseNvidiaSmiOutput, queryNvidiaSmi,
   LinuxProbe
 };

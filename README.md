@@ -25,7 +25,7 @@ CPU ▓▓░░░ 34%   GPU ░░░░░ 12%   DISK ▓░░░░ 11%   R
 - **Either side of the bar.** One setting moves all three groups from left to right and back, with no window reload
 - **Memory in GB to two decimals**, used against total, because "78 %" does not tell you whether the 4 GB you are about to allocate will fit
 - **Nothing shifts.** Values are padded to a fixed width with figure spaces, trailing so each reading sits the same distance from its bar, and going from 9% to 100% does not slide every group along the bar
-- **Hover** for the processor model, core count, exact free memory and the age of the last GPU sample
+- **Hover** for the processor model, core count, exact free memory and the age of the last GPU sample. On DISK, the per-device breakdown, with a link to choose which ones count
 
 ## Where the numbers come from
 
@@ -33,11 +33,11 @@ CPU and memory come from Node's own `os` module, so no process is spawned and th
 
 GPU and disk are platform-specific, each with its own source.
 
-**On Windows**, GPU and disk both come from performance counters, read through a single long-lived `typeperf` process. GPU is 3D engine utilisation; disk is busy time across every volume, the same figure Task Manager shows.
+**On Windows**, GPU and disk both come from performance counters, read through a single long-lived `typeperf` process. GPU is 3D engine utilisation; disk is queried per physical device (`0 C:`, `1 D:`, and so on) plus the `_Total` instance Windows already aggregates for you.
 
 `typeperf` only accepts localised counter names, so `\PhysicalDisk(_Total)\% Disk Time` is rejected outright on a French Windows. It does however accept a list in which only some counters resolve, as long as one of them does. Every known spelling is passed at once and the columns are resolved from the CSV header it returns, which keeps it to one process and one code path across locales.
 
-**On Linux**, disk comes from `/proc/diskstats`: field 13 is the milliseconds spent doing I/O on that device, the same counter `iostat`'s `%util` is derived from. Reading it needs no process at all, just a file read, cheaper than the Windows path. The extension reports the busiest whole disk (partitions and virtual devices such as `loop0` or `dm-0` are excluded), not an average across every device.
+**On Linux**, disk comes from `/proc/diskstats`: field 13 is the milliseconds spent doing I/O on that device, the same counter `iostat`'s `%util` is derived from. Reading it needs no process at all, just a file read, cheaper than the Windows path. Every whole disk is read individually (partitions and virtual devices such as `loop0` or `dm-0` are excluded).
 
 GPU on Linux is auto-detected once at startup, in this order: `/sys/class/drm/card*/device/gpu_busy_percent` if the kernel exposes it (works on AMD's `amdgpu` driver, and on some newer Intel setups), otherwise `nvidia-smi` if it resolves on `PATH`. Unlike the Windows probe, `nvidia-smi` is invoked once per refresh rather than streamed, because its own startup cost is a few tens of milliseconds — negligible next to the nearly three seconds a spawned PowerShell process costs, which is exactly what streaming was built to avoid on Windows in the first place. If neither source is available, the group greys out with `--`, the same degraded state as a missing `typeperf`.
 
@@ -68,6 +68,7 @@ No telemetry, no analytics, no network access of any kind. The extension reads t
 | `sysmon.showGpu` | `true` | Show the GPU group |
 | `sysmon.showDisk` | `true` | Show the DISK group |
 | `sysmon.showRam` | `true` | Show the RAM group |
+| `sysmon.diskDevices` | `[]` | Disks to count in the DISK value, by name (`"0 C:"` on Windows, `"sda"` on Linux). Empty means every disk, the default. Easiest to set through the `System Monitor: Choisir les disques affiches` command rather than typed by hand |
 | `sysmon.showLabels` | `true` | Show the `CPU` / `GPU` / `DISK` / `RAM` label of each group |
 | `sysmon.showBars` | `true` | Show the progress bar of each group |
 | `sysmon.showValues` | `true` | Show the numeric value of each group |
@@ -93,6 +94,7 @@ showCpu/showGpu false      DISK ▓░░░░ 11%   RAM ▓▓░░░ 12.35 
 | Command | What it does |
 | --- | --- |
 | `System Monitor: Relancer la sonde GPU/disque` | Restarts the probe immediately, from the command palette |
+| `System Monitor: Choisir les disques affiches` | Checklist of every disk seen so far. Leave everything checked for the default (every disk counts); uncheck some to only count the ones left. Also reachable from the DISK hover |
 
 ## Troubleshooting
 

@@ -89,6 +89,24 @@ test('padNum pade en queue et non en tete', () => {
   assert.strictEqual(m.padNum('ab', 4), 'ab  ');
 });
 
+test('selectedDiskPercent rend le total sans filtre', () => {
+  assert.strictEqual(m.selectedDiskPercent({ sda: 40, sdb: 10 }, 25, []), 25);
+  assert.strictEqual(m.selectedDiskPercent({ sda: 40 }, 25, null), 25);
+});
+
+test('selectedDiskPercent rend le max des disques coches', () => {
+  assert.strictEqual(m.selectedDiskPercent({ sda: 40, sdb: 90, sdc: 10 }, 25, ['sda', 'sdb']), 90);
+});
+
+test('selectedDiskPercent ignore les disques coches mais pas (encore) vus', () => {
+  assert.strictEqual(m.selectedDiskPercent({ sda: 40 }, 25, ['sda', 'sdz']), 40);
+});
+
+test('selectedDiskPercent rend null si aucun disque coche n a de donnee', () => {
+  assert.strictEqual(m.selectedDiskPercent({ sda: 40 }, 25, ['sdz']), null);
+  assert.strictEqual(m.selectedDiskPercent({}, 25, ['sda']), null);
+});
+
 test('ramSnapshot rend un pourcentage coherent avec les octets', () => {
   const r = m.ramSnapshot();
   assert.ok(r.totalBytes > 0);

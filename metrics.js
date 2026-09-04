@@ -74,6 +74,21 @@ function bar(pct, width, fullGlyph, emptyGlyph) {
   return fullGlyph.repeat(filled) + emptyGlyph.repeat(width - filled);
 }
 
+// Reduit le detail par disque a la seule valeur affichee a cote du groupe
+// DISK. Liste vide = comportement par defaut, celui d'avant ce reglage : le
+// total deja calcule par la sonde (agrege sur Windows, disque le plus charge
+// sur Linux). Liste non vide = maximum parmi les seuls disques coches, null
+// si aucun d'eux n'a encore ete vu (pas encore afficher un faux 0 %).
+function selectedDiskPercent(disks, fallback, selected) {
+  if (!selected || !selected.length) return fallback;
+  let max = null;
+  for (const name of selected) {
+    const v = disks && disks[name];
+    if (typeof v === 'number' && (max === null || v > max)) max = v;
+  }
+  return max;
+}
+
 function cpuInfo() {
   const c = os.cpus();
   return { model: (c[0] && c[0].model || 'inconnu').trim(), cores: c.length };
@@ -87,5 +102,6 @@ function formatAge(ms) {
 
 module.exports = {
   clampInt, cpuSample, cpuPercent, ramSnapshot,
-  formatGb, formatRam, formatPercent, padNum, colorFor, bar, cpuInfo, formatAge
+  formatGb, formatRam, formatPercent, padNum, colorFor, bar, cpuInfo, formatAge,
+  selectedDiskPercent
 };

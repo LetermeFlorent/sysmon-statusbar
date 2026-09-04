@@ -5,12 +5,23 @@ const cp = require('node:child_process');
 // liste ou seuls certains compteurs sont valides, du moment qu'il en reste un.
 // On passe donc toutes les variantes connues et on resout les colonnes en
 // lisant l'en-tete CSV qu'il renvoie.
+//
+// Le disque est demande avec le joker (*) et non (_Total) : Windows ramene
+// alors une colonne par disque physique (ex. "0 C:") PLUS une colonne
+// _Total agregee, dans le meme flux, sans compteur supplementaire.
 const COUNTERS = [
   '\\GPU Engine(*engtype_3D)\\Utilization Percentage',
   '\\Moteur GPU(*engtype_3D)\\Pourcentage d\'utilisation',
-  '\\PhysicalDisk(_Total)\\% Disk Time',
-  '\\Disque physique(_Total)\\Pourcentage du temps disque'
+  '\\PhysicalDisk(*)\\% Disk Time',
+  '\\Disque physique(*)\\Pourcentage du temps disque'
 ];
+
+// Extrait la partie entre parentheses d'un nom de compteur PDH, ex.
+// "\\HOST\Disque physique(0 C:)\Pourcentage du temps disque" -> "0 C:".
+function counterInstance(name) {
+  const m = /\(([^)]*)\)/.exec(String(name || ''));
+  return m ? m[1] : null;
+}
 
 function columnKind(name) {
   const n = String(name || '');
@@ -25,29 +36,47 @@ function splitCsv(line) {
   return s.replace(/^"/, '').replace(/"$/, '').split('","');
 }
 
+// Retourne, par colonne, { kind, instance }. instance ne sert que pour
+// 'disk' : le GPU reste agrege tel quel, aucun besoin de le ventiler par
+// moteur/process pour cette extension.
 function parseHeader(line) {
   const cols = splitCsv(line);
   if (!cols || cols.length < 2 || cols[0].indexOf('PDH-CSV') < 0) return null;
-  return cols.slice(1).map(columnKind);
+  return cols.slice(1).map((name) => {
+    const kind = columnKind(name);
+    if (!kind) return null;
+    return { kind, instance: kind === 'disk' ? counterInstance(name) : null };
+  });
 }
 
 function parseValues(line, kinds) {
   if (!kinds) return null;
   const cols = splitCsv(line);
   if (!cols || cols.length < 2 || cols[0].indexOf('PDH-CSV') >= 0) return null;
-  const sums = { gpu: null, disk: null };
+  let gpu = null;
+  let diskTotal = null;
+  const disks = {};
+  let sawDisk = false;
   for (let i = 1; i < cols.length; i++) {
-    const kind = kinds[i - 1];
-    if (!kind) continue;
+    const col = kinds[i - 1];
+    if (!col) continue;
     const n = parseFloat(cols[i].replace(/"/g, '').trim().replace(',', '.'));
     if (!isFinite(n)) continue;
-    sums[kind] = (sums[kind] === null ? 0 : sums[kind]) + n;
+    const v = Math.max(0, Math.min(100, n));
+    if (col.kind === 'gpu') {
+      gpu = (gpu === null ? 0 : gpu) + v;
+    } else if (col.kind === 'disk') {
+      sawDisk = true;
+      if (col.instance === '_Total') {
+        diskTotal = v;
+      } else if (col.instance) {
+        disks[col.instance] = v;
+      }
+    }
   }
-  if (sums.gpu === null && sums.disk === null) return null;
-  for (const k of ['gpu', 'disk']) {
-    if (sums[k] !== null) sums[k] = Math.max(0, Math.min(100, sums[k]));
-  }
-  return sums;
+  if (gpu === null && !sawDisk) return null;
+  if (gpu !== null) gpu = Math.max(0, Math.min(100, gpu));
+  return { gpu, disk: diskTotal, disks: sawDisk ? disks : null };
 }
 
 class Probe {
@@ -58,6 +87,7 @@ class Probe {
     this.kinds = null;
     this.gpu = null;
     this.disk = null;
+    this.disks = {};
     this.ts = 0;
     this.state = 'starting';
   }
@@ -71,6 +101,7 @@ class Probe {
     if (!v) return;
     if (v.gpu !== null) this.gpu = v.gpu;
     if (v.disk !== null) this.disk = v.disk;
+    if (v.disks) this.disks = v.disks;
     this.ts = Date.now();
     this.state = 'ok';
   }
@@ -121,8 +152,8 @@ class Probe {
   }
 
   snapshot() {
-    return { gpu: this.gpu, disk: this.disk, ts: this.ts, state: this.state };
+    return { gpu: this.gpu, disk: this.disk, disks: this.disks, ts: this.ts, state: this.state };
   }
 }
 
-module.exports = { parseHeader, parseValues, columnKind, Probe, COUNTERS };
+module.exports = { parseHeader, parseValues, columnKind, counterInstance, Probe, COUNTERS };
