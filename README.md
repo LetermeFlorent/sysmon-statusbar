@@ -29,13 +29,19 @@ CPU ▓▓░░░ 34%   GPU ░░░░░ 12%   DISK ▓░░░░ 11%   R
 
 ## Where the numbers come from
 
-CPU and memory come from Node's own `os` module, so no process is spawned and the cost is not measurable. CPU is the average across every logical core, computed by differencing cumulative counters between two refreshes — the first tick shows `--` because a rate needs two samples.
+CPU and memory come from Node's own `os` module, so no process is spawned and the cost is not measurable, identically on Windows and Linux. CPU is the average across every logical core, computed by differencing cumulative counters between two refreshes — the first tick shows `--` because a rate needs two samples.
 
-GPU and disk both come from Windows performance counters, read through a single long-lived `typeperf` process. GPU is 3D engine utilisation; disk is busy time across every volume, the same figure Task Manager shows. Windows only; CPU and memory work everywhere.
+GPU and disk are platform-specific, each with its own source.
+
+**On Windows**, GPU and disk both come from performance counters, read through a single long-lived `typeperf` process. GPU is 3D engine utilisation; disk is busy time across every volume, the same figure Task Manager shows.
 
 `typeperf` only accepts localised counter names, so `\PhysicalDisk(_Total)\% Disk Time` is rejected outright on a French Windows. It does however accept a list in which only some counters resolve, as long as one of them does. Every known spelling is passed at once and the columns are resolved from the CSV header it returns, which keeps it to one process and one code path across locales.
 
-**Why streaming and not a query per tick.** Three approaches were measured on the reference machine, an AMD Radeon integrated GPU with no `nvidia-smi`:
+**On Linux**, disk comes from `/proc/diskstats`: field 13 is the milliseconds spent doing I/O on that device, the same counter `iostat`'s `%util` is derived from. Reading it needs no process at all, just a file read, cheaper than the Windows path. The extension reports the busiest whole disk (partitions and virtual devices such as `loop0` or `dm-0` are excluded), not an average across every device.
+
+GPU on Linux is auto-detected once at startup, in this order: `/sys/class/drm/card*/device/gpu_busy_percent` if the kernel exposes it (works on AMD's `amdgpu` driver, and on some newer Intel setups), otherwise `nvidia-smi` if it resolves on `PATH`. Unlike the Windows probe, `nvidia-smi` is invoked once per refresh rather than streamed, because its own startup cost is a few tens of milliseconds — negligible next to the nearly three seconds a spawned PowerShell process costs, which is exactly what streaming was built to avoid on Windows in the first place. If neither source is available, the group greys out with `--`, the same degraded state as a missing `typeperf`.
+
+**Why the Windows GPU probe streams instead of querying per tick.** Three approaches were measured on the reference machine, an AMD Radeon integrated GPU with no `nvidia-smi`:
 
 | Approach | Resident memory | CPU burned | Latency per tick |
 | --- | --- | --- | --- |
@@ -49,7 +55,7 @@ A monitor that costs more than what it measures is worse than no monitor, which 
 
 ## Privacy
 
-No telemetry, no analytics, no network access of any kind. The extension reads two Node built-ins and one Windows performance counter, all locally. Nothing leaves the machine.
+No telemetry, no analytics, no network access of any kind. The extension reads two Node built-ins and, depending on platform, a Windows performance counter or a Linux sysfs/proc file, all locally. Nothing leaves the machine.
 
 ## Settings
 
@@ -67,9 +73,10 @@ No telemetry, no analytics, no network access of any kind. The extension reads t
 | `sysmon.showValues` | `true` | Show the numeric value of each group |
 | `sysmon.probeRestartSeconds` | `300` | Probe recycle interval, in seconds (minimum 60) |
 
-Turning off both `showGpu` and `showDisk` stops the `typeperf` probe entirely, so
-no process is spawned at all. Turning off both `showBars` and `showValues` hides
-every group, label included, since a lone label says nothing.
+Turning off both `showGpu` and `showDisk` stops the probe entirely, so on
+Windows no `typeperf` process is spawned and on Linux with an NVIDIA card no
+`nvidia-smi` invocation happens. Turning off both `showBars` and `showValues`
+hides every group, label included, since a lone label says nothing.
 
 Some combinations worth knowing:
 
@@ -85,19 +92,19 @@ showCpu/showGpu false      DISK ▓░░░░ 11%   RAM ▓▓░░░ 12.35 
 
 | Command | What it does |
 | --- | --- |
-| `System Monitor: Relancer la sonde typeperf` | Restarts the probe immediately, from the command palette |
+| `System Monitor: Relancer la sonde GPU/disque` | Restarts the probe immediately, from the command palette |
 
 ## Troubleshooting
 
 **The bars render as empty boxes.** Restart VS Code — the icon font is loaded at startup, and a freshly installed extension does not get it until then.
 
-**GPU or DISK shows `n/a`.** `typeperf` could not start, or neither spelling of the counter resolved. Check it by hand with `typeperf "\GPU Engine(*engtype_3D)\Utilization Percentage" -si 2 -sc 2`. On Windows builds where the performance counters have been disabled or corrupted, `lodctr /R` rebuilds them.
+**GPU or DISK shows `--` in grey and stays there.** On Windows, `typeperf` could not start or neither spelling of the counter resolved; check it by hand with `typeperf "\GPU Engine(*engtype_3D)\Utilization Percentage" -si 2 -sc 2`, and on builds where the performance counters have been disabled or corrupted, `lodctr /R` rebuilds them. On Linux, GPU stays `--` when neither `gpu_busy_percent` nor `nvidia-smi` was found at startup; run `System Monitor: Relancer la sonde GPU/disque` after installing drivers to re-detect without restarting the window. `/proc/diskstats` is present on every real Linux kernel, so DISK staying `--` there points at something else, most likely a container or an unusually locked-down `/proc`.
 
-**A group is greyed out with a stale number.** No sample has arrived for thirty seconds. Run `System Monitor: Relancer la sonde typeperf` from the command palette.
+**A group is greyed out with a stale number.** No sample has arrived for thirty seconds. Run `System Monitor: Relancer la sonde GPU/disque` from the command palette.
 
 **CPU sits at `--`.** Only expected on the very first tick. If it persists, the refresh timer is not firing — check that `sysmon.refreshSeconds` is a number and not a string.
 
-**One `typeperf` process per open window.** Expected: each VS Code window runs its own extension host, so each has its own probe. Turn off both `sysmon.showGpu` and `sysmon.showDisk` in the windows where you do not need them and no process is spawned at all.
+**One probe per open window.** Expected: each VS Code window runs its own extension host, so each has its own probe — on Windows that means one `typeperf` process, on Linux with an NVIDIA card one `nvidia-smi` invocation per refresh. Turn off both `sysmon.showGpu` and `sysmon.showDisk` in the windows where you do not need them and no process is spawned at all.
 
 ## License
 

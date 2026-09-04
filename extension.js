@@ -1,6 +1,14 @@
+const os = require('node:os');
 const vscode = require('vscode');
 const m = require('./metrics');
-const { Probe } = require('./probe');
+const { Probe: WindowsProbe } = require('./probe');
+const { LinuxProbe } = require('./linux');
+
+const IS_WINDOWS = os.platform() === 'win32';
+
+function createProbe(interval) {
+  return IS_WINDOWS ? new WindowsProbe(interval) : new LinuxProbe(interval);
+}
 
 const FULL = '$(sysmon-bar-full)';
 const EMPTY = '$(sysmon-bar-empty)';
@@ -80,9 +88,13 @@ function tipsFor(cpuPct, snap, ram) {
     const md = new vscode.MarkdownString(undefined, true);
     md.appendMarkdown('**' + title + '**\n\n');
     if (!snap || snap.state === 'missing') {
-      md.appendMarkdown('typeperf introuvable ou refuse par le systeme.\n\n');
+      md.appendMarkdown(IS_WINDOWS
+        ? 'typeperf introuvable ou refuse par le systeme.\n\n'
+        : 'Aucune source disponible sur cette machine.\n\n');
     } else if (snap.state === 'error') {
-      md.appendMarkdown('La sonde typeperf s\'est arretee.\n\n');
+      md.appendMarkdown(IS_WINDOWS
+        ? 'La sonde typeperf s\'est arretee.\n\n'
+        : 'La sonde s\'est arretee.\n\n');
     } else if (value === null) {
       md.appendMarkdown('Premier echantillon en attente.\n\n');
     } else {
@@ -97,8 +109,12 @@ function tipsFor(cpuPct, snap, ram) {
   return {
     cpu: cpuMd,
     ram: ramMd,
-    gpu: mk('GPU', snap ? snap.gpu : null, 'compteur Windows GPU Engine, moteurs de type 3D'),
-    disk: mk('Disque', snap ? snap.disk : null, 'compteur Windows PhysicalDisk, temps d\'activite tous volumes')
+    gpu: mk('GPU', snap ? snap.gpu : null, IS_WINDOWS
+      ? 'compteur Windows GPU Engine, moteurs de type 3D'
+      : 'sysfs gpu_busy_percent, ou nvidia-smi si disponible'),
+    disk: mk('Disque', snap ? snap.disk : null, IS_WINDOWS
+      ? 'compteur Windows PhysicalDisk, temps d\'activite tous volumes'
+      : '/proc/diskstats, disque le plus charge')
   };
 }
 
@@ -154,7 +170,7 @@ function syncProbe() {
   const interval = m.clampInt(cfg().get('refreshSeconds'), 1, 60);
   if (!probe || probe.interval !== interval) {
     if (probe) probe.stop();
-    probe = new Probe(interval);
+    probe = createProbe(interval);
   }
   probe.restart();
   const every = Math.max(60, Number(cfg().get('probeRestartSeconds')) || 300) * 1000;

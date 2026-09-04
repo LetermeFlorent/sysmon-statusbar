@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0
+
+GPU and disk now work on Linux, not just Windows. Disk reads `/proc/diskstats`
+directly, no process needed. GPU auto-detects at startup: `gpu_busy_percent`
+under `/sys/class/drm` if the kernel exposes it (AMD, some newer Intel setups),
+otherwise `nvidia-smi` invoked once per refresh rather than streamed, since its
+own startup cost is negligible compared to what streaming was built to avoid on
+Windows. CPU and memory were already cross-platform. Windows behaviour is
+unchanged, still on `typeperf`.
+
 ## 0.2.2
 
 Values follow the theme instead of the load colour. A status bar item carries a

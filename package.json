@@ -2,7 +2,7 @@
 	"name": "sysmon-statusbar",
 	"displayName": "System Monitor Status Bar",
 	"description": "Status bar display of CPU, GPU, disk and system memory usage, as coloured progress bars with live values.",
-	"version": "0.2.2",
+	"version": "0.3.0",
 	"publisher": "letermeflorent",
 	"license": "MIT",
 	"icon": "icon.png",
@@ -39,7 +39,7 @@
 		"commands": [
 			{
 				"command": "sysmon.restartProbe",
-				"title": "System Monitor: Relancer la sonde typeperf"
+				"title": "System Monitor: Relancer la sonde GPU/disque"
 			}
 		],
 		"icons": {
@@ -118,7 +118,7 @@
 				"sysmon.probeRestartSeconds": {
 					"type": "number",
 					"default": 300,
-					"description": "Intervalle de recyclage de la sonde typeperf (secondes). typeperf fige son jeu d'instances au demarrage, le recyclage permet de voir les nouveaux process."
+					"description": "Intervalle de recyclage de la sonde GPU/disque (secondes). Sur Windows, typeperf fige son jeu d'instances au demarrage ; le recyclage permet de voir les nouveaux process. Sur Linux, le recyclage relance la detection du GPU (utile si un pilote se charge apres coup)."
 				}
 			}
 		}
