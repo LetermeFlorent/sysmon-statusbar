@@ -31,13 +31,22 @@ const DISK_SOURCE = IS_WINDOWS
 const FULL = '$(sysmon-bar-full)';
 const EMPTY = '$(sysmon-bar-empty)';
 const GRAY = '#8a8a8a';
-const STALE_MS = 30000;
+
+// Trois echantillons manques, jamais moins de trente secondes. Fige a 30 s, ce
+// seuil declarait perimee toute mesure des que refreshSeconds passait au-dessus
+// de 30 : la sonde echantillonnait moins souvent que le seuil, et les barres
+// restaient grises en permanence alors que rien n'etait en panne. Le recyclage
+// periodique de typeperf coute en plus un intervalle sans donnee.
+function staleMs(refreshSeconds) {
+  return Math.max(30000, refreshSeconds * 3000);
+}
 
 const LABELS = { cpu: 'CPU', gpu: 'GPU', disk: 'DISK', ram: 'RAM' };
 
 const it = {};
 let timer = null;
 let restartTimer = null;
+let restartEvery = 0;
 let prevCpu = null;
 let probe = null;
 let currentAlignment = null;
@@ -105,8 +114,19 @@ function readShare() {
   try { return JSON.parse(fs.readFileSync(SHARE_FILE, 'utf8')); } catch (_) { return null; }
 }
 
+// writeFileSync tronque le fichier avant de le reecrire. Une autre fenetre qui
+// lit pendant ce creux obtient du vide : sharedSnapshot rend null, groupKeys
+// retombe sur le groupe DISK d'attente et syncGroups detruit puis recree tous
+// les items. Toute la barre d'etat clignotait pour une lecture ratee. Le rename
+// remplace le fichier d'un bloc.
 function writeShare(o) {
-  try { fs.writeFileSync(SHARE_FILE, JSON.stringify(o)); } catch (_) { /* temp en lecture seule */ }
+  const tmp = SHARE_FILE + '.' + process.pid + '.tmp';
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(o));
+    fs.renameSync(tmp, SHARE_FILE);
+  } catch (_) {
+    try { fs.unlinkSync(tmp); } catch (_) { /* temp en lecture seule */ }
+  }
 }
 
 function shareEnabled() { return cfg().get('shareProbe') !== false; }
@@ -141,6 +161,24 @@ function releaseShare() {
   const s = readShare();
   if (s && s.owner === OWNER_ID) writeShare(Object.assign({}, s, { owner: null, lease: 0 }));
   leaseHeld = false;
+}
+
+// Prise de bail par la force, pour la commande de relance. Le detenteur
+// precedent verra au tick suivant que le bail ne lui appartient plus et
+// arretera sa sonde.
+function takeoverShare(now) {
+  const s = readShare();
+  writeShare(Object.assign({}, s || {}, { owner: OWNER_ID, lease: now + LEASE_MS }));
+  leaseHeld = true;
+}
+
+// Ce que la barre d'etat affiche, et non ce que cette fenetre mesure. Une
+// fenetre qui ne detient pas le bail n'a aucune sonde : les commandes qui
+// lisaient probe.snapshot() y repondaient "aucun disque detecte" alors que
+// leurs propres groupes disque etaient a l'ecran.
+function currentSnapshot() {
+  if (probe) return probe.snapshot();
+  return shareEnabled() ? sharedSnapshot() : null;
 }
 
 // Chaque ecriture sur un StatusBarItem traverse le pont vers le process
@@ -179,6 +217,7 @@ function readCfg() {
     showBars: c.get('showBars') !== false,
     showValues: c.get('showValues') !== false,
     diskDevices: c.get('diskDevices') || [],
+    refreshSeconds: m.clampInt(c.get('refreshSeconds'), 1, 60),
     alignment: c.get('alignment') === 'right' ? 'right' : 'left',
     tooltipMs: Math.max(1, Number(c.get('tooltipSeconds')) || 5) * 1000,
     show: {
@@ -309,9 +348,16 @@ function render() {
   const snap = pumpProbe(conf, now);
   syncGroups(conf, snap);
 
-  const cur = m.cpuSample();
-  const cpuPct = prevCpu ? m.cpuPercent(prevCpu, cur) : null;
-  prevCpu = cur;
+  // os.cpus() alloue un objet par thread logique a chaque appel. Sans le
+  // groupe CPU a l'ecran, personne ne lit le resultat.
+  let cpuPct = null;
+  if (conf.show.cpu) {
+    const cur = m.cpuSample();
+    cpuPct = prevCpu ? m.cpuPercent(prevCpu, cur) : null;
+    prevCpu = cur;
+  } else {
+    prevCpu = null;
+  }
   if (it.cpu) {
     drawGroup('cpu', cpuPct, m.formatPercent(cpuPct),
       cpuPct === null ? GRAY : m.colorFor(cpuPct), conf);
@@ -320,7 +366,7 @@ function render() {
   // Un redemarrage de sonde repasse par l'etat 'starting' : tant que le dernier
   // echantillon date de moins de STALE_MS, il reste valable et il n'y a aucune
   // raison de faire clignoter les barres en gris.
-  const fresh = !!(snap && snap.ts && now - snap.ts <= STALE_MS);
+  const fresh = !!(snap && snap.ts && now - snap.ts <= staleMs(conf.refreshSeconds));
   const stale = !fresh || snap.state === 'missing' || snap.state === 'error';
 
   if (it.gpu) {
@@ -374,21 +420,40 @@ function pauseAllowed() {
   return cfg().get('pauseWhenUnfocused') === true;
 }
 
+// Le recyclage periodique garde sa cadence tant qu'elle ne change pas, sinon
+// chaque passage de syncProbe repoussait l'echeance et la sonde n'etait jamais
+// recyclee sur une fenetre qui prend et rend le focus souvent.
+function armRestart() {
+  const every = Math.max(60, Number(cfg().get('probeRestartSeconds')) || 300) * 1000;
+  if (restartTimer && every === restartEvery) return;
+  clearInterval(restartTimer);
+  restartEvery = every;
+  restartTimer = setInterval(function () { if (probe) probe.restart(); }, every);
+}
+
+function stopRestart() {
+  clearInterval(restartTimer);
+  restartTimer = null;
+  restartEvery = 0;
+}
+
 function syncProbe() {
   const wanted = shown('gpu') || shown('disk');
-  clearInterval(restartTimer);
   if (!wanted || (pauseAllowed() && !focused()) || !leaseHeld) {
+    stopRestart();
     if (probe) { probe.stop(); probe = null; }
     return;
   }
   const interval = m.clampInt(cfg().get('refreshSeconds'), 1, 60);
-  if (!probe || probe.interval !== interval) {
-    if (probe) probe.stop();
-    probe = createProbe(interval);
-  }
-  probe.restart();
-  const every = Math.max(60, Number(cfg().get('probeRestartSeconds')) || 300) * 1000;
-  restartTimer = setInterval(function () { if (probe) probe.restart(); }, every);
+  // Une sonde deja en marche au bon intervalle n'a aucune raison d'etre
+  // recyclee. syncProbe passe a chaque changement de focus : relancer typeperf
+  // a chaque alt-tab coutait une creation de processus, une enumeration PDH et
+  // une fenetre aveugle d'un intervalle par aller-retour.
+  if (probe && probe.interval === interval) { armRestart(); return; }
+  if (probe) probe.stop();
+  probe = createProbe(interval);
+  probe.start();
+  armRestart();
 }
 
 function disposeItems() {
@@ -431,13 +496,17 @@ function syncGroups(conf, snap) {
 
 function activate(context) {
   context.subscriptions.push(vscode.commands.registerCommand('sysmon.restartProbe', function () {
-    if (probe) probe.restart(); else syncProbe();
+    if (probe) { probe.restart(); render(); return; }
+    // Fenetre lectrice : rien a relancer chez elle. Un clic sur "relancer"
+    // demande une mesure fraiche, donc elle prend le bail et sonde elle-meme.
+    takeoverShare(Date.now());
+    syncProbe();
     render();
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand('sysmon.pickDisks', async function () {
-    const snap = probe ? probe.snapshot() : null;
-    const names = snap && snap.disks ? Object.keys(snap.disks).sort() : [];
+    const snap = currentSnapshot();
+    const names = knownDisks(snap);
     if (!names.length) {
       vscode.window.showInformationMessage('Aucun disque detecte pour l\'instant. Patientez quelques secondes puis reessayez.');
       return;
@@ -481,7 +550,7 @@ function activate(context) {
   context.subscriptions.push({
     dispose: function () {
       clearInterval(timer);
-      clearInterval(restartTimer);
+      stopRestart();
       if (probe) { probe.stop(); probe = null; }
       releaseShare();
       disposeItems();
@@ -495,7 +564,7 @@ function activate(context) {
 
 function deactivate() {
   clearInterval(timer);
-  clearInterval(restartTimer);
+  stopRestart();
   if (probe) { probe.stop(); probe = null; }
   releaseShare();
   disposeItems();

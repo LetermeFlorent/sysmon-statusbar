@@ -37,7 +37,7 @@ function formatGb(bytes) {
 // U+2007 FIGURE SPACE a exactement la largeur d'un chiffre, contrairement a
 // l'espace ordinaire. Sans lui, passer de "9%" a "100%" elargit l'item et
 // decale tout ce qui suit dans la barre d'etat a chaque changement de palier.
-const PAD = ' ';
+const PAD = '\u2007';
 
 // Le remplissage va APRES la valeur, pas avant : la barre est a gauche, donc un
 // remplissage en tete eloignerait "4%" de sa barre plus que "100%" de la sienne.
@@ -77,21 +77,6 @@ function bar(pct, width, fullGlyph, emptyGlyph) {
   return fullGlyph.repeat(filled) + emptyGlyph.repeat(width - filled);
 }
 
-// Reduit le detail par disque a la seule valeur affichee a cote du groupe
-// DISK. Liste vide = comportement par defaut, celui d'avant ce reglage : le
-// total deja calcule par la sonde (agrege sur Windows, disque le plus charge
-// sur Linux). Liste non vide = maximum parmi les seuls disques coches, null
-// si aucun d'eux n'a encore ete vu (pas encore afficher un faux 0 %).
-function selectedDiskPercent(disks, fallback, selected) {
-  if (!selected || !selected.length) return fallback;
-  let max = null;
-  for (const name of selected) {
-    const v = disks && disks[name];
-    if (typeof v === 'number' && (max === null || v > max)) max = v;
-  }
-  return max;
-}
-
 // Le modele et le nombre de coeurs ne changent pas d'une session a l'autre, et
 // os.cpus() alloue un objet par thread logique a chaque appel.
 let cpuInfoCache = null;
@@ -112,6 +97,5 @@ function formatAge(ms) {
 
 module.exports = {
   clampInt, cpuSample, cpuPercent, ramSnapshot,
-  formatGb, formatRam, formatPercent, padNum, colorFor, bar, cpuInfo, formatAge,
-  selectedDiskPercent
+  formatGb, formatRam, formatPercent, padNum, colorFor, bar, cpuInfo, formatAge
 };

@@ -78,12 +78,21 @@ function readGpuSysfs(paths) {
   return any ? Math.max(0, Math.min(100, sum)) : null;
 }
 
-function hasNvidiaSmi() {
-  try {
-    cp.execFileSync('nvidia-smi', ['-L'], { timeout: 3000, stdio: ['ignore', 'ignore', 'ignore'] });
-    return true;
-  } catch (_) { return false; }
+// execFileSync bloquait l'hote d'extension jusqu'a trois secondes, a chaque
+// changement de focus et a chaque recyclage de sonde, en gelant toutes les
+// autres extensions du meme hote. La detection part en asynchrone et ne se fait
+// qu'une fois par processus : le binaire n'apparait pas en cours de session.
+let nvidiaState = null;
+
+function detectNvidiaSmi(cb) {
+  if (nvidiaState !== null) { cb(nvidiaState); return; }
+  cp.execFile('nvidia-smi', ['-L'], { timeout: 3000 }, (err) => {
+    nvidiaState = !err;
+    cb(nvidiaState);
+  });
 }
+
+function resetNvidiaDetection() { nvidiaState = null; }
 
 function parseNvidiaSmiOutput(text) {
   let sum = 0, any = false;
@@ -124,10 +133,22 @@ class LinuxProbe {
 
   _detect() {
     this.gpuPaths = findGpuSysfsPaths();
-    this.gpuMethod = this.gpuPaths.length ? 'sysfs' : (hasNvidiaSmi() ? 'nvidia' : null);
     let diskAvailable = true;
     try { readDiskStats(); } catch (_) { diskAvailable = false; }
-    this.missing = !diskAvailable && this.gpuMethod === null;
+    if (this.gpuPaths.length) {
+      this.gpuMethod = 'sysfs';
+      this.missing = false;
+      return;
+    }
+    // Le temps que la detection reponde, seul le disque alimente l'affichage,
+    // ce qui vaut mieux qu'un hote fige pendant trois secondes.
+    this.gpuMethod = null;
+    this.missing = !diskAvailable;
+    detectNvidiaSmi((ok) => {
+      if (this.gpuPaths.length) return;
+      this.gpuMethod = ok ? 'nvidia' : null;
+      this.missing = !diskAvailable && this.gpuMethod === null;
+    });
   }
 
   _tick() {
@@ -187,6 +208,6 @@ class LinuxProbe {
 
 module.exports = {
   isWholeDisk, parseDiskStats, diskPercent, diskPercents, readDiskStats,
-  findGpuSysfsPaths, readGpuSysfs, hasNvidiaSmi, parseNvidiaSmiOutput, queryNvidiaSmi,
-  LinuxProbe
+  findGpuSysfsPaths, readGpuSysfs, detectNvidiaSmi, resetNvidiaDetection,
+  parseNvidiaSmiOutput, queryNvidiaSmi, LinuxProbe
 };

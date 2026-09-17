@@ -35,6 +35,9 @@
 	"extensionKind": [
 		"ui"
 	],
+	"scripts": {
+		"test": "node --test \"test/*.test.js\""
+	},
 	"contributes": {
 		"commands": [
 			{
