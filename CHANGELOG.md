@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.7.1
+
+On Linux, `nvidia-smi` was probed with `execFileSync`. That call blocks the
+extension host for as long as it takes to answer, up to a three-second timeout,
+and it ran on every focus change and every probe recycle. Every other extension
+sharing that host froze with it. Detection is asynchronous now and happens once
+per process, since a GPU binary does not appear mid-session.
+
+The lease file goes through a temporary name renamed into place, so a window
+reading it while another writes never lands on half a file. Its staleness
+threshold follows the configured refresh interval rather than sitting at a fixed
+thirty seconds, which used to grey out the bars on any interval above ten
+seconds even though the probe was working.
+
+The recycle timer was armed again on every pass without clearing the previous
+one, leaving one more `setInterval` alive each time. It is now keyed on the
+interval and replaced instead of stacked. The CPU sample is read only when the
+CPU group is displayed, `showCpu` off no longer walks every logical core twice a
+second for nothing.
+
 ## 0.7.0
 
 One probe for the whole machine, shared between every open window through a

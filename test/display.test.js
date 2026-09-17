@@ -2,8 +2,6 @@ const test = require('node:test');
 const assert = require('node:assert');
 const Module = require('node:module');
 
-// extension.js parle a l'API VS Code, absente en test : un double suffit pour
-// charger le module et exercer ses fonctions d'affichage.
 const fakeVscode = {
   StatusBarAlignment: { Left: 1, Right: 2 },
   ConfigurationTarget: { Global: 1 },
@@ -119,7 +117,7 @@ test('la sonde macOS ne remonte aucun disque, le groupe DISK reste seul', () => 
 
 test('le bail est libre tant que personne ne l a pris', () => {
   const fs = require('node:fs');
-  try { fs.rmSync(ext.SHARE_FILE); } catch (_) { /* deja absent */ }
+  try { fs.rmSync(ext.SHARE_FILE); } catch (_) { }
   assert.strictEqual(ext.claimLease(Date.now()), true);
 });
 
@@ -148,11 +146,11 @@ test('l instantane partage rend les mesures publiees', () => {
 
 test('un partage absent ou vide ne rend aucun instantane', () => {
   const fs = require('node:fs');
-  try { fs.rmSync(ext.SHARE_FILE); } catch (_) { /* deja absent */ }
+  try { fs.rmSync(ext.SHARE_FILE); } catch (_) { }
   assert.strictEqual(ext.sharedSnapshot(), null);
   fs.writeFileSync(ext.SHARE_FILE, 'pas du json');
   assert.strictEqual(ext.sharedSnapshot(), null);
-  try { fs.rmSync(ext.SHARE_FILE); } catch (_) { /* deja absent */ }
+  try { fs.rmSync(ext.SHARE_FILE); } catch (_) { }
 });
 
 test('une sonde Windows ou Linux fraiche part elle aussi sur DISK', () => {

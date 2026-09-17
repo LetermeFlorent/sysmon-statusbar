@@ -32,11 +32,6 @@ const FULL = '$(sysmon-bar-full)';
 const EMPTY = '$(sysmon-bar-empty)';
 const GRAY = '#8a8a8a';
 
-// Trois echantillons manques, jamais moins de trente secondes. Fige a 30 s, ce
-// seuil declarait perimee toute mesure des que refreshSeconds passait au-dessus
-// de 30 : la sonde echantillonnait moins souvent que le seuil, et les barres
-// restaient grises en permanence alors que rien n'etait en panne. Le recyclage
-// periodique de typeperf coute en plus un intervalle sans donnee.
 function staleMs(refreshSeconds) {
   return Math.max(30000, refreshSeconds * 3000);
 }
@@ -54,8 +49,6 @@ let currentKeys = '';
 let ctx = null;
 let lastTips = 0;
 
-// Windows nomme ses instances "0 C:" ou "1 D: E:", le numero de disque suivi
-// des lettres de volume. Seules les lettres parlent a la lecture.
 function shortDiskName(name) {
   const mm = /^\d+\s+(.+)$/.exec(String(name || ''));
   return mm ? mm[1] : String(name || '');
@@ -75,17 +68,12 @@ function knownDisks(snap) {
   return snap && snap.disks ? Object.keys(snap.disks).sort() : [];
 }
 
-// Liste vide dans les reglages = tous les disques, ce qui evite qu'un disque
-// branche plus tard passe inapercu. Une liste non vide est prise au mot, y
-// compris quand elle ne laisse rien : c'est un choix, pas un oubli.
 function visibleDisks(conf, snap) {
   const all = knownDisks(snap);
   if (!conf.diskDevices.length) return all;
   return all.filter(function (n) { return conf.diskDevices.indexOf(n) >= 0; });
 }
 
-// Ordre d'affichage, de gauche a droite. Un groupe par disque, et un groupe
-// DISK en attente tant que la sonde n'a encore rien remonte.
 function groupKeys(conf, snap) {
   const keys = [];
   if (conf.show.cpu) keys.push('cpu');
@@ -100,10 +88,6 @@ function groupKeys(conf, snap) {
 
 function cfg() { return vscode.workspace.getConfiguration('sysmon'); }
 
-// Chaque fenetre VS Code a son propre extension host, donc trois fenetres
-// ouvertes lancaient trois sondes sur les memes compteurs. Une seule detient le
-// bail et mesure, les autres relisent son resultat : la machine n'est sondee
-// qu'une fois et aucune fenetre n'affiche de valeur grisee pour autant.
 const SHARE_FILE = path.join(os.tmpdir(), 'sysmon-probe-share.json');
 const LEASE_MS = 8000;
 const OWNER_ID = String(process.pid) + '-' + Math.random().toString(36).slice(2, 8);
@@ -114,25 +98,18 @@ function readShare() {
   try { return JSON.parse(fs.readFileSync(SHARE_FILE, 'utf8')); } catch (_) { return null; }
 }
 
-// writeFileSync tronque le fichier avant de le reecrire. Une autre fenetre qui
-// lit pendant ce creux obtient du vide : sharedSnapshot rend null, groupKeys
-// retombe sur le groupe DISK d'attente et syncGroups detruit puis recree tous
-// les items. Toute la barre d'etat clignotait pour une lecture ratee. Le rename
-// remplace le fichier d'un bloc.
 function writeShare(o) {
   const tmp = SHARE_FILE + '.' + process.pid + '.tmp';
   try {
     fs.writeFileSync(tmp, JSON.stringify(o));
     fs.renameSync(tmp, SHARE_FILE);
   } catch (_) {
-    try { fs.unlinkSync(tmp); } catch (_) { /* temp en lecture seule */ }
+    try { fs.unlinkSync(tmp); } catch (_) { }
   }
 }
 
 function shareEnabled() { return cfg().get('shareProbe') !== false; }
 
-// Le bail se prend quand personne ne le tient ou qu'il a expire, ce qui couvre
-// la fermeture brutale de la fenetre qui mesurait.
 function claimLease(now) {
   const s = readShare();
   return !s || !s.owner || !s.lease || s.lease < now || s.owner === OWNER_ID;
@@ -163,28 +140,17 @@ function releaseShare() {
   leaseHeld = false;
 }
 
-// Prise de bail par la force, pour la commande de relance. Le detenteur
-// precedent verra au tick suivant que le bail ne lui appartient plus et
-// arretera sa sonde.
 function takeoverShare(now) {
   const s = readShare();
   writeShare(Object.assign({}, s || {}, { owner: OWNER_ID, lease: now + LEASE_MS }));
   leaseHeld = true;
 }
 
-// Ce que la barre d'etat affiche, et non ce que cette fenetre mesure. Une
-// fenetre qui ne detient pas le bail n'a aucune sonde : les commandes qui
-// lisaient probe.snapshot() y repondaient "aucun disque detecte" alors que
-// leurs propres groupes disque etaient a l'ecran.
 function currentSnapshot() {
   if (probe) return probe.snapshot();
   return shareEnabled() ? sharedSnapshot() : null;
 }
 
-// Chaque ecriture sur un StatusBarItem traverse le pont vers le process
-// d'interface. Les libelles ne changent jamais et une barre ne bouge qu'au
-// passage d'un palier : sans ce garde, tout est repousse deux fois par seconde
-// pour un rendu identique.
 function seg(item, text, color) {
   if (!text) {
     if (item._on !== false) { item.hide(); item._on = false; }
@@ -207,8 +173,6 @@ function shown(key) {
   return cfg().get('show' + key.charAt(0).toUpperCase() + key.slice(1)) !== false;
 }
 
-// Une vingtaine de getConfiguration par tick sinon, en cascade a travers
-// shown() et drawGroup().
 function readCfg() {
   const c = cfg();
   return {
@@ -229,11 +193,6 @@ function readCfg() {
   };
 }
 
-// Un item de barre d'etat ne porte qu'une seule couleur. La valeur vit donc
-// dans le sien : sans couleur explicite, VS Code lui applique
-// statusBar.foreground, qui suit le theme, sombre en theme clair et clair en
-// theme sombre. Seule la barre est teintee par la charge. Le prix a payer est
-// la marge que VS Code insere entre deux items, qu'aucune extension ne reduit.
 function drawGroup(key, pct, valueText, color, conf) {
   const g = it[key];
   const withBar = conf.showBars;
@@ -243,9 +202,6 @@ function drawGroup(key, pct, valueText, color, conf) {
 
   seg(g.lbl, conf.showLabels ? labelFor(key) : '', undefined);
   seg(g.bar, withBar ? m.bar(pct, conf.barWidth, FULL, EMPTY) : '', color);
-  // Le remplissage reste en place. Un item se dimensionne sur son contenu, donc
-  // le retirer fait passer la valeur de deux a quatre chasses entre "9%" et
-  // "100%", et tout ce qui suit dans la barre d'etat se decale a chaque palier.
   seg(g.val, withValue ? valueText : '', undefined);
 }
 
@@ -311,8 +267,6 @@ function tipsFor(cpuPct, snap, ram, conf) {
     gpu: mk('GPU', snap ? snap.gpu : null, GPU_SOURCE)
   };
 
-  // Un disque, un tooltip : le nom complet de l'instance y figure, alors que le
-  // libelle de la barre d'etat n'en garde que les lettres de volume.
   for (const name of shown) {
     const v = snap && snap.disks && typeof snap.disks[name] === 'number' ? snap.disks[name] : null;
     tips[diskKey(name)] = withPicker(mk('Disque ' + name, v, DISK_SOURCE));
@@ -322,9 +276,6 @@ function tipsFor(cpuPct, snap, ram, conf) {
   return tips;
 }
 
-// Decide a chaque tick si cette fenetre mesure ou se contente de lire, puis
-// rend l'instantane a afficher. Le proprietaire du bail publie le sien, les
-// autres relisent le fichier partage.
 function pumpProbe(conf, now) {
   if (!conf.show.gpu && !conf.show.disk) return probe ? probe.snapshot() : null;
   if (!shareEnabled()) {
@@ -348,8 +299,6 @@ function render() {
   const snap = pumpProbe(conf, now);
   syncGroups(conf, snap);
 
-  // os.cpus() alloue un objet par thread logique a chaque appel. Sans le
-  // groupe CPU a l'ecran, personne ne lit le resultat.
   let cpuPct = null;
   if (conf.show.cpu) {
     const cur = m.cpuSample();
@@ -363,9 +312,6 @@ function render() {
       cpuPct === null ? GRAY : m.colorFor(cpuPct), conf);
   }
 
-  // Un redemarrage de sonde repasse par l'etat 'starting' : tant que le dernier
-  // echantillon date de moins de STALE_MS, il reste valable et il n'y a aucune
-  // raison de faire clignoter les barres en gris.
   const fresh = !!(snap && snap.ts && now - snap.ts <= staleMs(conf.refreshSeconds));
   const stale = !fresh || snap.state === 'missing' || snap.state === 'error';
 
@@ -388,9 +334,6 @@ function render() {
   const ram = m.ramSnapshot();
   if (it.ram) drawGroup('ram', ram.pct, m.formatRam(ram), m.colorFor(ram.pct), conf);
 
-  // Un tooltip n'est lu qu'au survol et VS Code ne le rafraichit pas pendant
-  // qu'il est affiche : le reconstruire a chaque tick revient a jeter des
-  // MarkdownString par seconde pour rien.
   if (now - lastTips < conf.tooltipMs) return;
   lastTips = now;
   const tips = tipsFor(cpuPct, snap, ram, conf);
@@ -420,9 +363,6 @@ function pauseAllowed() {
   return cfg().get('pauseWhenUnfocused') === true;
 }
 
-// Le recyclage periodique garde sa cadence tant qu'elle ne change pas, sinon
-// chaque passage de syncProbe repoussait l'echeance et la sonde n'etait jamais
-// recyclee sur une fenetre qui prend et rend le focus souvent.
 function armRestart() {
   const every = Math.max(60, Number(cfg().get('probeRestartSeconds')) || 300) * 1000;
   if (restartTimer && every === restartEvery) return;
@@ -445,10 +385,6 @@ function syncProbe() {
     return;
   }
   const interval = m.clampInt(cfg().get('refreshSeconds'), 1, 60);
-  // Une sonde deja en marche au bon intervalle n'a aucune raison d'etre
-  // recyclee. syncProbe passe a chaque changement de focus : relancer typeperf
-  // a chaque alt-tab coutait une creation de processus, une enumeration PDH et
-  // une fenetre aveugle d'un intervalle par aller-retour.
   if (probe && probe.interval === interval) { armRestart(); return; }
   if (probe) probe.stop();
   probe = createProbe(interval);
@@ -465,9 +401,6 @@ function disposeItems() {
   }
 }
 
-// Les items sont recrees uniquement quand la liste des groupes change, donc a
-// l'arrivee d'un disque, a un decochage ou a un changement de cote. Un
-// StatusBarItem ne peut changer ni de cote ni de priorite apres coup.
 function syncGroups(conf, snap) {
   const want = groupKeys(conf, snap);
   const sig = want.join('|');
@@ -481,8 +414,6 @@ function syncGroups(conf, snap) {
     ? vscode.StatusBarAlignment.Right
     : vscode.StatusBarAlignment.Left;
 
-  // La priorite decroit de 3 par groupe parce qu'un groupe occupe trois items :
-  // libelle, barre, valeur.
   let prio = 100;
   for (const key of want) {
     it[key] = {
@@ -497,8 +428,6 @@ function syncGroups(conf, snap) {
 function activate(context) {
   context.subscriptions.push(vscode.commands.registerCommand('sysmon.restartProbe', function () {
     if (probe) { probe.restart(); render(); return; }
-    // Fenetre lectrice : rien a relancer chez elle. Un clic sur "relancer"
-    // demande une mesure fraiche, donc elle prend le bail et sonde elle-meme.
     takeoverShare(Date.now());
     syncProbe();
     render();
@@ -524,8 +453,6 @@ function activate(context) {
     });
     if (picked === undefined) return;
     const chosen = picked.map((i) => i.name);
-    // Tout laisser coche revient au mode par defaut (tableau vide), plutot que
-    // de figer la liste actuelle : un disque branche plus tard reste couvert.
     const value = chosen.length === names.length ? [] : chosen;
     await cfg().update('diskDevices', value, vscode.ConfigurationTarget.Global);
     render();

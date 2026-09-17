@@ -39,7 +39,6 @@ test('parseDiskStats ignore une ligne trop courte ou vide', () => {
 test('diskPercent calcule le pourcentage du disque le plus charge', () => {
   const prev = { sda: 150, nvme0n1: 600 };
   const cur = { sda: 650, nvme0n1: 700 };
-  // sda : (650-150)/1000*100 = 50%, nvme0n1 : (700-600)/1000*100 = 10%
   assert.strictEqual(l.diskPercent(prev, 0, cur, 1000), 50);
 });
 

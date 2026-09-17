@@ -6,8 +6,6 @@ const DRM_ROOT = '/sys/class/drm';
 const DISKSTATS_PATH = '/proc/diskstats';
 
 function isWholeDisk(name) {
-  // Disques physiques entiers uniquement : sda, nvme0n1, vda, mmcblk0. Jamais
-  // une partition (sda1, nvme0n1p1) ni un device virtuel (loop0, dm-0, ram0).
   return /^(sd[a-z]+|vd[a-z]+|xvd[a-z]+|nvme\d+n\d+|mmcblk\d+)$/.test(name);
 }
 
@@ -18,17 +16,12 @@ function parseDiskStats(text) {
     if (cols.length < 14) continue;
     const name = cols[2];
     if (!isWholeDisk(name)) continue;
-    // Champ 13 (index 0 apres le nom : 10) = ms passees a faire des E/S,
-    // c'est ce dont iostat tire son %util.
     const ms = Number(cols[12]);
     if (isFinite(ms)) devices[name] = ms;
   }
   return devices;
 }
 
-// Pourcentage d'activite par disque entre deux lectures de /proc/diskstats.
-// Un disque absent d'un des deux releves (branche/debranche entre-temps) est
-// simplement omis plutot que de fausser le calcul.
 function diskPercents(prev, prevTs, cur, curTs) {
   const dtWall = curTs - prevTs;
   if (dtWall <= 0) return {};
@@ -62,7 +55,7 @@ function findGpuSysfsPaths() {
   for (const name of cards) {
     if (!/^card\d+$/.test(name)) continue;
     const p = path.join(DRM_ROOT, name, 'device', 'gpu_busy_percent');
-    try { fs.accessSync(p, fs.constants.R_OK); paths.push(p); } catch (_) { /* pas expose sur ce kernel/vendor */ }
+    try { fs.accessSync(p, fs.constants.R_OK); paths.push(p); } catch (_) { }
   }
   return paths;
 }
@@ -73,15 +66,11 @@ function readGpuSysfs(paths) {
     try {
       const n = Number(fs.readFileSync(p, 'utf8').trim());
       if (isFinite(n)) { sum += n; any = true; }
-    } catch (_) { /* carte suspendue ou debranchee depuis la detection */ }
+    } catch (_) { }
   }
   return any ? Math.max(0, Math.min(100, sum)) : null;
 }
 
-// execFileSync bloquait l'hote d'extension jusqu'a trois secondes, a chaque
-// changement de focus et a chaque recyclage de sonde, en gelant toutes les
-// autres extensions du meme hote. La detection part en asynchrone et ne se fait
-// qu'une fois par processus : le binaire n'apparait pas en cours de session.
 let nvidiaState = null;
 
 function detectNvidiaSmi(cb) {
@@ -98,8 +87,6 @@ function parseNvidiaSmiOutput(text) {
   let sum = 0, any = false;
   for (const raw of String(text || '').split('\n')) {
     const line = raw.trim();
-    // Number('') vaut 0, donc une ligne vide compterait comme une lecture
-    // valide sans ce garde-fou explicite.
     if (!line) continue;
     const n = Number(line);
     if (isFinite(n)) { sum += n; any = true; }
@@ -140,8 +127,6 @@ class LinuxProbe {
       this.missing = false;
       return;
     }
-    // Le temps que la detection reponde, seul le disque alimente l'affichage,
-    // ce qui vaut mieux qu'un hote fige pendant trois secondes.
     this.gpuMethod = null;
     this.missing = !diskAvailable;
     detectNvidiaSmi((ok) => {
@@ -168,7 +153,7 @@ class LinuxProbe {
       }
       this.prevDisk = cur;
       this.prevDiskTs = curTs;
-    } catch (_) { /* /proc/diskstats absent sur cette plateforme */ }
+    } catch (_) { }
 
     let gpuOk = false;
     if (this.gpuMethod === 'sysfs') {

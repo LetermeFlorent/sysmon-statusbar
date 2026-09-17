@@ -1,16 +1,7 @@
 const cp = require('node:child_process');
 
-// macOS n'expose pas de "pourcentage d'occupation disque" sans privileges :
-// iostat ne donne que des debits (KB/t, tps, MB/s) et fs_usage demande root.
-// Plutot que de fabriquer un pourcentage a partir d'un debit, la sonde laisse
-// le disque a null et l'affichage montre n/a.
-//
-// Le GPU passe par ioreg. Le nom de la classe change avec le materiel :
-// IOAccelerator sur Intel et AMD, AGXAccelerator sur Apple Silicon.
 const GPU_CLASSES = ['AGXAccelerator', 'IOAccelerator'];
 
-// Les compteurs vivent dans le dictionnaire PerformanceStatistics, sous des
-// cles dont le libelle varie selon le pilote.
 const GPU_KEYS = [
   'Device Utilization %',
   'Renderer Utilization %',
@@ -55,7 +46,6 @@ class MacProbe {
 
   _query(cb) {
     if (this.gpuClass) { queryIoreg(this.gpuClass, cb); return; }
-    // Premiere passe : on essaie chaque classe et on retient celle qui repond.
     let i = 0;
     const next = () => {
       if (i >= GPU_CLASSES.length) { cb(null); return; }

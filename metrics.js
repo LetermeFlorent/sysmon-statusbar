@@ -34,30 +34,17 @@ function formatGb(bytes) {
   return (Number(bytes) / GB).toFixed(2);
 }
 
-// U+2007 FIGURE SPACE a exactement la largeur d'un chiffre, contrairement a
-// l'espace ordinaire. Sans lui, passer de "9%" a "100%" elargit l'item et
-// decale tout ce qui suit dans la barre d'etat a chaque changement de palier.
 const PAD = '\u2007';
 
-// Le remplissage va APRES la valeur, pas avant : la barre est a gauche, donc un
-// remplissage en tete eloignerait "4%" de sa barre plus que "100%" de la sienne.
-// En queue, chaque valeur commence a la meme distance de sa barre et c'est le
-// groupe suivant qui reste aligne.
 function padNum(text, width) {
   const s = String(text);
   return s.length >= width ? s : s + PAD.repeat(width - s.length);
 }
 
-// Largeur 4, celle de "100%" : a 3, le passage de 99% a 100% elargissait l'item
-// d'une chasse et decalait tout ce qui suit dans la barre d'etat. Le vide en
-// queue sur "2%" est le prix d'un affichage qui ne bouge jamais.
 function formatPercent(pct) {
   return padNum(pct === null ? '--' : Math.round(pct) + '%', 4);
 }
 
-// La largeur se deduit du total, qui ne change pas de la session : la partie
-// utilisee ne peut pas etre plus longue que lui, donc "9.99 / 31.74 GB" occupe
-// autant que "12.35 / 31.74 GB", et une machine a 128 Go reste stable aussi.
 function formatRam(snap) {
   const total = formatGb(snap.totalBytes);
   return padNum(formatGb(snap.usedBytes) + ' / ' + total + ' GB', total.length * 2 + 6);
@@ -77,8 +64,6 @@ function bar(pct, width, fullGlyph, emptyGlyph) {
   return fullGlyph.repeat(filled) + emptyGlyph.repeat(width - filled);
 }
 
-// Le modele et le nombre de coeurs ne changent pas d'une session a l'autre, et
-// os.cpus() alloue un objet par thread logique a chaque appel.
 let cpuInfoCache = null;
 
 function cpuInfo() {

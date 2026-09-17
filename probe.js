@@ -1,14 +1,5 @@
 const cp = require('node:child_process');
 
-// typeperf ne comprend que les noms localises : sur un Windows francais
-// "\PhysicalDisk(_Total)\% Disk Time" est refuse. Il accepte en revanche une
-// liste ou seuls certains compteurs sont valides, du moment qu'il en reste un.
-// On passe donc toutes les variantes connues et on resout les colonnes en
-// lisant l'en-tete CSV qu'il renvoie.
-//
-// Le disque est demande avec le joker (*) et non (_Total) : Windows ramene
-// alors une colonne par disque physique (ex. "0 C:") PLUS une colonne
-// _Total agregee, dans le meme flux, sans compteur supplementaire.
 const COUNTERS = [
   '\\GPU Engine(*engtype_3D)\\Utilization Percentage',
   '\\Moteur GPU(*engtype_3D)\\Pourcentage d\'utilisation',
@@ -16,8 +7,6 @@ const COUNTERS = [
   '\\Disque physique(*)\\Pourcentage du temps disque'
 ];
 
-// Extrait la partie entre parentheses d'un nom de compteur PDH, ex.
-// "\\HOST\Disque physique(0 C:)\Pourcentage du temps disque" -> "0 C:".
 function counterInstance(name) {
   const m = /\(([^)]*)\)/.exec(String(name || ''));
   return m ? m[1] : null;
@@ -36,9 +25,6 @@ function splitCsv(line) {
   return s.replace(/^"/, '').replace(/"$/, '').split('","');
 }
 
-// Retourne, par colonne, { kind, instance }. instance ne sert que pour
-// 'disk' : le GPU reste agrege tel quel, aucun besoin de le ventiler par
-// moteur/process pour cette extension.
 function parseHeader(line) {
   const cols = splitCsv(line);
   if (!cols || cols.length < 2 || cols[0].indexOf('PDH-CSV') < 0) return null;
