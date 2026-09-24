@@ -89,7 +89,7 @@ class MacProbe {
   restart() { this.stop(); this.start(); }
 
   snapshot() {
-    return { gpu: this.gpu, disk: this.disk, disks: this.disks, ts: this.ts, state: this.state };
+    return { gpu: this.gpu, gpus: {}, disk: this.disk, disks: this.disks, ts: this.ts, state: this.state };
   }
 }
 

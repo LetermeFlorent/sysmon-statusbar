@@ -88,3 +88,8 @@ test('parseNvidiaSmiOutput rend null sans ligne exploitable', () => {
 test('parseNvidiaSmiOutput plafonne a cent', () => {
   assert.strictEqual(l.parseNvidiaSmiOutput('80\n50\n'), 100);
 });
+
+test('parseNvidiaSmiEach donne une valeur par carte, dans l ordre', () => {
+  assert.deepStrictEqual(l.parseNvidiaSmiEach('13\n27\n'), { '0': 13, '1': 27 });
+  assert.deepStrictEqual(l.parseNvidiaSmiEach(''), {});
+});

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.0
+
+Disks could already be picked one by one, CPU and GPU could not. A machine with
+two graphics cards showed a single GPU bar adding both together, and there was
+no way to watch one core pinned at 100 % while the average sat at 8 %.
+
+Two new commands, `Choisir les coeurs CPU affiches` and `Choisir les GPU
+affiches`, and their settings `cpuDevices` and `gpuDevices`, add one group per
+logical core or per adapter. The global group stays by default and can be kept
+alongside. On Windows the probe splits the `GPU Engine` counters by adapter LUID;
+on Linux each `cardN` in sysfs and each line of `nvidia-smi` becomes its own
+adapter. macOS keeps a single GPU value.
+
 ## 0.7.1
 
 On Linux, `nvidia-smi` was probed with `execFileSync`. That call blocks the

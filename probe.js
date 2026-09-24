@@ -12,6 +12,11 @@ function counterInstance(name) {
   return m ? m[1] : null;
 }
 
+function gpuAdapter(name) {
+  const m = /luid_(0x[0-9a-f]+_0x[0-9a-f]+)/i.exec(String(name || ''));
+  return m ? m[1].toLowerCase() : null;
+}
+
 function columnKind(name) {
   const n = String(name || '');
   if (/GPU Engine|Moteur GPU/i.test(n)) return 'gpu';
@@ -28,10 +33,19 @@ function splitCsv(line) {
 function parseHeader(line) {
   const cols = splitCsv(line);
   if (!cols || cols.length < 2 || cols[0].indexOf('PDH-CSV') < 0) return null;
-  return cols.slice(1).map((name) => {
+  const names = cols.slice(1);
+  const adapters = [];
+  for (const name of names) {
+    const a = columnKind(name) === 'gpu' ? gpuAdapter(name) : null;
+    if (a && adapters.indexOf(a) < 0) adapters.push(a);
+  }
+  adapters.sort();
+  return names.map((name) => {
     const kind = columnKind(name);
     if (!kind) return null;
-    return { kind, instance: kind === 'disk' ? counterInstance(name) : null };
+    if (kind === 'disk') return { kind, instance: counterInstance(name) };
+    const a = gpuAdapter(name);
+    return { kind, instance: a ? String(adapters.indexOf(a)) : null };
   });
 }
 
@@ -42,6 +56,7 @@ function parseValues(line, kinds) {
   let gpu = null;
   let diskTotal = null;
   const disks = {};
+  const gpus = {};
   let sawDisk = false;
   for (let i = 1; i < cols.length; i++) {
     const col = kinds[i - 1];
@@ -51,6 +66,7 @@ function parseValues(line, kinds) {
     const v = Math.max(0, Math.min(100, n));
     if (col.kind === 'gpu') {
       gpu = (gpu === null ? 0 : gpu) + v;
+      if (col.instance !== null) gpus[col.instance] = Math.min(100, (gpus[col.instance] || 0) + v);
     } else if (col.kind === 'disk') {
       sawDisk = true;
       if (col.instance === '_Total') {
@@ -62,7 +78,7 @@ function parseValues(line, kinds) {
   }
   if (gpu === null && !sawDisk) return null;
   if (gpu !== null) gpu = Math.max(0, Math.min(100, gpu));
-  return { gpu, disk: diskTotal, disks: sawDisk ? disks : null };
+  return { gpu, gpus, disk: diskTotal, disks: sawDisk ? disks : null };
 }
 
 class Probe {
@@ -72,6 +88,7 @@ class Probe {
     this.buf = '';
     this.kinds = null;
     this.gpu = null;
+    this.gpus = {};
     this.disk = null;
     this.disks = {};
     this.ts = 0;
@@ -85,7 +102,7 @@ class Probe {
     }
     const v = parseValues(line, this.kinds);
     if (!v) return;
-    if (v.gpu !== null) this.gpu = v.gpu;
+    if (v.gpu !== null) { this.gpu = v.gpu; this.gpus = v.gpus; }
     if (v.disk !== null) this.disk = v.disk;
     if (v.disks) this.disks = v.disks;
     this.ts = Date.now();
@@ -138,8 +155,8 @@ class Probe {
   }
 
   snapshot() {
-    return { gpu: this.gpu, disk: this.disk, disks: this.disks, ts: this.ts, state: this.state };
+    return { gpu: this.gpu, gpus: this.gpus, disk: this.disk, disks: this.disks, ts: this.ts, state: this.state };
   }
 }
 
-module.exports = { parseHeader, parseValues, columnKind, counterInstance, Probe, COUNTERS };
+module.exports = { gpuAdapter, parseHeader, parseValues, columnKind, counterInstance, Probe, COUNTERS };

@@ -124,3 +124,20 @@ test('la liste de compteurs couvre les deux locales et interroge tous les disque
   assert.ok(p.COUNTERS.some(c => /PhysicalDisk\(\*\)/.test(c)));
   assert.ok(p.COUNTERS.some(c => /Disque physique\(\*\)/.test(c)));
 });
+
+const HDR_2GPU = '"(PDH-CSV 4.0)",' +
+  '"\\\\H\\GPU Engine(pid_4_luid_0x00000000_0x0001B000_phys_0_eng_0_engtype_3D)\\Utilization Percentage",' +
+  '"\\\\H\\GPU Engine(pid_4_luid_0x00000000_0x0000A000_phys_0_eng_0_engtype_3D)\\Utilization Percentage",' +
+  '"\\\\H\\GPU Engine(pid_9_luid_0x00000000_0x0000A000_phys_0_eng_1_engtype_3D)\\Utilization Percentage"';
+
+test('parseHeader numerote les adaptateurs GPU par luid croissant', () => {
+  const h = p.parseHeader(HDR_2GPU);
+  assert.deepStrictEqual(h.map((c) => c.instance), ['1', '0', '0']);
+});
+
+test('parseValues additionne les moteurs de chaque GPU separement', () => {
+  const h = p.parseHeader(HDR_2GPU);
+  const v = p.parseValues('"09/03/2026 10:00:00.000","7","20","15"', h);
+  assert.deepStrictEqual(v.gpus, { '0': 35, '1': 7 });
+  assert.strictEqual(v.gpu, 42);
+});

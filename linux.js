@@ -71,6 +71,18 @@ function readGpuSysfs(paths) {
   return any ? Math.max(0, Math.min(100, sum)) : null;
 }
 
+function readGpuSysfsEach(paths) {
+  const out = {};
+  for (const p of paths) {
+    const card = path.basename(path.dirname(path.dirname(p)));
+    try {
+      const n = Number(fs.readFileSync(p, 'utf8').trim());
+      if (isFinite(n)) out[card] = Math.max(0, Math.min(100, n));
+    } catch (_) { }
+  }
+  return out;
+}
+
 let nvidiaState = null;
 
 function detectNvidiaSmi(cb) {
@@ -94,11 +106,24 @@ function parseNvidiaSmiOutput(text) {
   return any ? Math.max(0, Math.min(100, sum)) : null;
 }
 
+function parseNvidiaSmiEach(text) {
+  const out = {};
+  let i = 0;
+  for (const raw of String(text || '').split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const n = Number(line);
+    if (isFinite(n)) out[String(i)] = Math.max(0, Math.min(100, n));
+    i++;
+  }
+  return out;
+}
+
 function queryNvidiaSmi(cb) {
   cp.execFile('nvidia-smi',
     ['--query-gpu=utilization.gpu', '--format=csv,noheader,nounits'],
     { timeout: 3000 },
-    (err, stdout) => cb(err ? null : parseNvidiaSmiOutput(stdout)));
+    (err, stdout) => cb(err ? null : parseNvidiaSmiOutput(stdout), err ? {} : parseNvidiaSmiEach(stdout)));
 }
 
 class LinuxProbe {
@@ -106,6 +131,7 @@ class LinuxProbe {
     this.interval = Math.max(1, Number(intervalSeconds) || 2);
     this.timer = null;
     this.gpu = null;
+    this.gpus = {};
     this.disk = null;
     this.disks = {};
     this.ts = 0;
@@ -158,12 +184,12 @@ class LinuxProbe {
     let gpuOk = false;
     if (this.gpuMethod === 'sysfs') {
       const v = readGpuSysfs(this.gpuPaths);
-      if (v !== null) { this.gpu = v; gpuOk = true; }
+      if (v !== null) { this.gpu = v; this.gpus = readGpuSysfsEach(this.gpuPaths); gpuOk = true; }
     } else if (this.gpuMethod === 'nvidia' && !this.querying) {
       this.querying = true;
-      queryNvidiaSmi((v) => {
+      queryNvidiaSmi((v, each) => {
         this.querying = false;
-        if (v !== null) { this.gpu = v; this.ts = Date.now(); if (!this.missing) this.state = 'ok'; }
+        if (v !== null) { this.gpu = v; this.gpus = each; this.ts = Date.now(); if (!this.missing) this.state = 'ok'; }
       });
     }
 
@@ -188,11 +214,11 @@ class LinuxProbe {
 
   restart() { this.stop(); this.start(); }
 
-  snapshot() { return { gpu: this.gpu, disk: this.disk, disks: this.disks, ts: this.ts, state: this.state }; }
+  snapshot() { return { gpu: this.gpu, gpus: this.gpus, disk: this.disk, disks: this.disks, ts: this.ts, state: this.state }; }
 }
 
 module.exports = {
   isWholeDisk, parseDiskStats, diskPercent, diskPercents, readDiskStats,
-  findGpuSysfsPaths, readGpuSysfs, detectNvidiaSmi, resetNvidiaDetection,
-  parseNvidiaSmiOutput, queryNvidiaSmi, LinuxProbe
+  findGpuSysfsPaths, readGpuSysfs, readGpuSysfsEach, detectNvidiaSmi, resetNvidiaDetection,
+  parseNvidiaSmiOutput, parseNvidiaSmiEach, queryNvidiaSmi, LinuxProbe
 };

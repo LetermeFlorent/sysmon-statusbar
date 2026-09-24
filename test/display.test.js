@@ -160,3 +160,27 @@ test('une sonde Windows ou Linux fraiche part elle aussi sur DISK', () => {
     assert.deepStrictEqual(ext.groupKeys(conf(), p.snapshot()), ['cpu', 'gpu', 'disk', 'ram']);
   }
 });
+
+test('sans choix, un seul groupe CPU et un seul groupe GPU', () => {
+  assert.deepStrictEqual(ext.deviceKeys('gpu', [], ['0', '1']), ['gpu']);
+});
+
+test('les coeurs et GPU coches donnent un groupe chacun, global en tete', () => {
+  assert.deepStrictEqual(ext.deviceKeys('cpu', ['all', '3', '0'], ['0', '1', '2', '3']), ['cpu', 'cpu:0', 'cpu:3']);
+  assert.deepStrictEqual(ext.deviceKeys('gpu', ['1'], ['0', '1']), ['gpu:1']);
+});
+
+test('un GPU coche mais absent retombe sur le groupe global', () => {
+  assert.deepStrictEqual(ext.deviceKeys('gpu', ['5'], ['0']), ['gpu']);
+  assert.deepStrictEqual(ext.deviceKeys('gpu', ['0'], []), ['gpu']);
+});
+
+test('les GPU connus se trient par numero', () => {
+  assert.deepStrictEqual(ext.knownGpus({ gpus: { 'card10': 1, 'card2': 1 } }), ['card2', 'card10']);
+});
+
+test('libelles des groupes coeur et GPU', () => {
+  assert.strictEqual(ext.labelFor('cpu:4'), 'C4');
+  assert.strictEqual(ext.labelFor('gpu:1'), 'GPU1');
+  assert.strictEqual(ext.labelFor('gpu:card0'), 'card0');
+});

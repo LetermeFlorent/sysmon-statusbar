@@ -17,6 +17,14 @@ function cpuSample() {
   return { idle, total };
 }
 
+function cpuCoreSamples() {
+  return os.cpus().map((c) => {
+    let total = 0;
+    for (const k in c.times) total += c.times[k];
+    return { idle: c.times.idle, total };
+  });
+}
+
 function cpuPercent(prev, cur) {
   const dt = cur.total - prev.total;
   if (dt <= 0) return null;
@@ -81,6 +89,6 @@ function formatAge(ms) {
 }
 
 module.exports = {
-  clampInt, cpuSample, cpuPercent, ramSnapshot,
+  clampInt, cpuSample, cpuCoreSamples, cpuPercent, ramSnapshot,
   formatGb, formatRam, formatPercent, padNum, colorFor, bar, cpuInfo, formatAge
 };

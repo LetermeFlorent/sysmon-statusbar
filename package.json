@@ -2,7 +2,7 @@
 	"name": "sysmon-statusbar",
 	"displayName": "System Monitor Status Bar",
 	"description": "Status bar display of CPU, GPU, disk and system memory usage, as coloured progress bars with live values.",
-	"version": "0.7.1",
+	"version": "0.8.0",
 	"publisher": "letermeflorent",
 	"license": "MIT",
 	"icon": "icon.png",
@@ -43,6 +43,14 @@
 			{
 				"command": "sysmon.restartProbe",
 				"title": "System Monitor: Relancer la sonde GPU/disque"
+			},
+			{
+				"command": "sysmon.pickCpus",
+				"title": "System Monitor: Choisir les coeurs CPU affiches"
+			},
+			{
+				"command": "sysmon.pickGpus",
+				"title": "System Monitor: Choisir les GPU affiches"
 			},
 			{
 				"command": "sysmon.pickDisks",
@@ -114,6 +122,22 @@
 					},
 					"default": [],
 					"description": "Disques affiches dans la barre d etat, un groupe par disque (ex. [\"0 C:\"] sur Windows, [\"sda\"] sur Linux). Vide = tous les disques vus. Se remplit facilement via la commande System Monitor: Choisir les disques affiches."
+				},
+				"sysmon.cpuDevices": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": [],
+					"description": "Groupes CPU affiches : \"all\" pour la moyenne de tous les coeurs, puis un numero de coeur logique par groupe (ex. [\"all\", \"0\", \"1\"]). Vide = moyenne seule. Se remplit via la commande System Monitor: Choisir les coeurs CPU affiches."
+				},
+				"sysmon.gpuDevices": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": [],
+					"description": "Groupes GPU affiches : \"all\" pour la somme de tous les adaptateurs, puis un groupe par GPU (\"0\", \"1\" sur Windows et avec nvidia-smi, \"card0\" sur Linux). Vide = somme seule. Se remplit via la commande System Monitor: Choisir les GPU affiches."
 				},
 				"sysmon.showLabels": {
 					"type": "boolean",

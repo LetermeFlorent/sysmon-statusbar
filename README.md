@@ -21,6 +21,14 @@ Windows, the device name on Linux (`sda`, `nvme0n1`). Which ones appear is up
 to you, through `System Monitor: Choisir les disques affiches` or the
 `diskDevices` setting.
 
+CPU and GPU work the same way. By default each is a single group, the average of
+every logical core and the sum of every graphics adapter. `System Monitor: Choisir
+les coeurs CPU affiches` and `System Monitor: Choisir les GPU affiches` add one
+group per core (`C0`, `C1`...) or per adapter (`GPU0`, `GPU1` on Windows and
+with `nvidia-smi`, `card0` on Linux), with or without the global group next to
+them. On Windows a laptop often reports a second, virtual adapter that stays at
+zero: that is why the default keeps the sum.
+
 Bars are drawn with an embedded icon font, sharing the exact glyphs and fill algorithm of [Claude Rate Limit Status Bar](https://github.com/LetermeFlorent/claude-ratelimit-statusbar) so both extensions read as one band. Colour lives on the bar alone: green below 50 %, yellow below 75 %, orange below 90 %, red at 90 % and above. Labels and readings follow `statusBar.foreground`, which keeps them legible on light and dark themes alike.
 
 One setting moves every group from left to right and back, with no window reload. Memory is shown in GB to two decimals, used against total, because "78 %" does not tell you whether the 4 GB you are about to allocate will fit. Values are padded to a fixed width with figure spaces, trailing, so each reading sits the same distance from its bar and going from 9 % to 100 % does not slide the whole band along.
@@ -81,6 +89,8 @@ No telemetry, no analytics, no network access of any kind. The extension reads t
 | `sysmon.showDisk` | `true` | Show the disk groups, one per physical device |
 | `sysmon.showRam` | `true` | Show the RAM group |
 | `sysmon.diskDevices` | `[]` | Disks to display, by name (`"0 C:"` on Windows, `"sda"` on Linux). Empty means every disk seen, so one plugged in later still shows up. Easiest to set through the `System Monitor: Choisir les disques affiches` command rather than typed by hand |
+| `sysmon.cpuDevices` | `[]` | CPU groups to display: `"all"` for the average, then logical core numbers (`"0"`, `"1"`). Empty means the average alone |
+| `sysmon.gpuDevices` | `[]` | GPU groups to display: `"all"` for the sum of every adapter, then adapter ids (`"0"` on Windows, `"card0"` on Linux). Empty means the sum alone. Windows numbers adapters by LUID order, which is usually stable across reboots but not guaranteed |
 | `sysmon.showLabels` | `true` | Show the `CPU` / `GPU` / `DISK` / `RAM` label of each group |
 | `sysmon.showBars` | `true` | Show the progress bar of each group |
 | `sysmon.showValues` | `true` | Show the numeric value of each group |
@@ -108,6 +118,8 @@ showCpu/showGpu false      DISK ▓░░░░ 11%   RAM ▓▓░░░ 12.35 
 | --- | --- |
 | `System Monitor: Relancer la sonde GPU/disque` | Restarts the probe immediately, from the command palette |
 | `System Monitor: Choisir les disques affiches` | Checklist of every disk seen so far. Leave everything checked for the default, where every disk counts, or uncheck some to only count the ones left. Also reachable from the DISK hover |
+| `System Monitor: Choisir les coeurs CPU affiches` | Checklist of the global average and every logical core. Also reachable from the CPU hover |
+| `System Monitor: Choisir les GPU affiches` | Checklist of the global sum and every adapter seen by the probe. Also reachable from the GPU hover |
 
 ## Troubleshooting
 

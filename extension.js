@@ -43,6 +43,7 @@ let timer = null;
 let restartTimer = null;
 let restartEvery = 0;
 let prevCpu = null;
+let prevCores = null;
 let probe = null;
 let currentAlignment = null;
 let currentKeys = '';
@@ -60,8 +61,36 @@ function isDiskKey(key) { return key.indexOf('disk:') === 0; }
 
 function diskOf(key) { return key.slice(5); }
 
+function subOf(key) { return key.slice(key.indexOf(':') + 1); }
+
+function gpuLabel(id) { return /^\d+$/.test(id) ? 'GPU' + id : id; }
+
 function labelFor(key) {
-  return isDiskKey(key) ? shortDiskName(diskOf(key)) : LABELS[key];
+  if (isDiskKey(key)) return shortDiskName(diskOf(key));
+  if (key.indexOf('cpu:') === 0) return 'C' + subOf(key);
+  if (key.indexOf('gpu:') === 0) return gpuLabel(subOf(key));
+  return LABELS[key];
+}
+
+function byNumber(a, b) {
+  const na = Number(a.replace(/\D+/g, '')), nb = Number(b.replace(/\D+/g, ''));
+  return na - nb || (a < b ? -1 : a > b ? 1 : 0);
+}
+
+function knownGpus(snap) {
+  return snap && snap.gpus ? Object.keys(snap.gpus).sort(byNumber) : [];
+}
+
+function knownCores() {
+  return m.cpuCoreSamples().map(function (_, i) { return String(i); });
+}
+
+function deviceKeys(kind, chosen, ids) {
+  if (!chosen.length || !ids.length) return [kind];
+  const keys = [];
+  if (chosen.indexOf('all') >= 0) keys.push(kind);
+  for (const id of ids) if (chosen.indexOf(id) >= 0) keys.push(kind + ':' + id);
+  return keys.length ? keys : [kind];
 }
 
 function knownDisks(snap) {
@@ -76,8 +105,8 @@ function visibleDisks(conf, snap) {
 
 function groupKeys(conf, snap) {
   const keys = [];
-  if (conf.show.cpu) keys.push('cpu');
-  if (conf.show.gpu) keys.push('gpu');
+  if (conf.show.cpu) keys.push.apply(keys, deviceKeys('cpu', conf.cpuDevices || [], knownCores()));
+  if (conf.show.gpu) keys.push.apply(keys, deviceKeys('gpu', conf.gpuDevices || [], knownGpus(snap)));
   if (conf.show.disk) {
     if (!knownDisks(snap).length) keys.push('disk');
     else for (const n of visibleDisks(conf, snap)) keys.push(diskKey(n));
@@ -122,6 +151,7 @@ function publishShare(snap, now) {
     ts: snap.ts,
     state: snap.state,
     gpu: snap.gpu,
+    gpus: snap.gpus || {},
     disk: snap.disk,
     disks: snap.disks || {}
   });
@@ -130,7 +160,7 @@ function publishShare(snap, now) {
 function sharedSnapshot() {
   const s = readShare();
   if (!s || !s.ts) return null;
-  return { gpu: s.gpu, disk: s.disk, disks: s.disks || {}, ts: s.ts, state: s.state || 'ok' };
+  return { gpu: s.gpu, gpus: s.gpus || {}, disk: s.disk, disks: s.disks || {}, ts: s.ts, state: s.state || 'ok' };
 }
 
 function releaseShare() {
@@ -181,6 +211,8 @@ function readCfg() {
     showBars: c.get('showBars') !== false,
     showValues: c.get('showValues') !== false,
     diskDevices: c.get('diskDevices') || [],
+    cpuDevices: c.get('cpuDevices') || [],
+    gpuDevices: c.get('gpuDevices') || [],
     refreshSeconds: m.clampInt(c.get('refreshSeconds'), 1, 60),
     alignment: c.get('alignment') === 'right' ? 'right' : 'left',
     tooltipMs: Math.max(1, Number(c.get('tooltipSeconds')) || 5) * 1000,
@@ -210,7 +242,13 @@ function probeText(pct, state) {
   return m.formatPercent(pct);
 }
 
-function tipsFor(cpuPct, snap, ram, conf) {
+function pickerLink(md, command, text) {
+  md.isTrusted = true;
+  md.appendMarkdown('\n\n[$(list-selection) ' + text + '](command:' + command + ')');
+  return md;
+}
+
+function tipsFor(cpuPct, cores, snap, ram, conf) {
   const ci = m.cpuInfo();
   const cpuMd = new vscode.MarkdownString(undefined, true);
   cpuMd.appendMarkdown('**Processeur**\n\n');
@@ -262,10 +300,24 @@ function tipsFor(cpuPct, snap, ram, conf) {
   };
 
   const tips = {
-    cpu: cpuMd,
+    cpu: pickerLink(cpuMd, 'sysmon.pickCpus', 'Choisir les coeurs affiches'),
     ram: ramMd,
-    gpu: mk('GPU', snap ? snap.gpu : null, GPU_SOURCE)
+    gpu: pickerLink(mk('GPU, tous adaptateurs', snap ? snap.gpu : null, GPU_SOURCE),
+      'sysmon.pickGpus', 'Choisir les GPU affiches')
   };
+
+  for (const key in it) {
+    if (key.indexOf('cpu:') === 0) {
+      const v = cores[subOf(key)];
+      const md = new vscode.MarkdownString(undefined, true);
+      md.appendMarkdown('**Coeur logique ' + subOf(key) + '**\n\n' + ci.model + '\n\n');
+      md.appendMarkdown('Charge : ' + (typeof v === 'number' ? v.toFixed(1) + ' %' : 'mesure en cours'));
+      tips[key] = pickerLink(md, 'sysmon.pickCpus', 'Choisir les coeurs affiches');
+    } else if (key.indexOf('gpu:') === 0) {
+      const v = snap && snap.gpus && typeof snap.gpus[subOf(key)] === 'number' ? snap.gpus[subOf(key)] : null;
+      tips[key] = pickerLink(mk('GPU ' + subOf(key), v, GPU_SOURCE), 'sysmon.pickGpus', 'Choisir les GPU affiches');
+    }
+  }
 
   for (const name of shown) {
     const v = snap && snap.disks && typeof snap.disks[name] === 'number' ? snap.disks[name] : null;
@@ -300,24 +352,35 @@ function render() {
   syncGroups(conf, snap);
 
   let cpuPct = null;
+  const cores = {};
   if (conf.show.cpu) {
     const cur = m.cpuSample();
     cpuPct = prevCpu ? m.cpuPercent(prevCpu, cur) : null;
     prevCpu = cur;
+    const curCores = m.cpuCoreSamples();
+    curCores.forEach(function (c, i) {
+      const p = prevCores && prevCores[i] ? m.cpuPercent(prevCores[i], c) : null;
+      if (p !== null) cores[i] = p;
+    });
+    prevCores = curCores;
   } else {
     prevCpu = null;
+    prevCores = null;
   }
-  if (it.cpu) {
-    drawGroup('cpu', cpuPct, m.formatPercent(cpuPct),
-      cpuPct === null ? GRAY : m.colorFor(cpuPct), conf);
+  for (const key in it) {
+    if (key !== 'cpu' && key.indexOf('cpu:') !== 0) continue;
+    const v = key === 'cpu' ? cpuPct : (typeof cores[subOf(key)] === 'number' ? cores[subOf(key)] : null);
+    drawGroup(key, v, m.formatPercent(v), v === null ? GRAY : m.colorFor(v), conf);
   }
 
   const fresh = !!(snap && snap.ts && now - snap.ts <= staleMs(conf.refreshSeconds));
   const stale = !fresh || snap.state === 'missing' || snap.state === 'error';
 
-  if (it.gpu) {
-    const v = snap ? snap.gpu : null;
-    drawGroup('gpu', v === null ? 0 : v,
+  for (const key in it) {
+    if (key !== 'gpu' && key.indexOf('gpu:') !== 0) continue;
+    const raw = !snap ? null : key === 'gpu' ? snap.gpu : snap.gpus && snap.gpus[subOf(key)];
+    const v = typeof raw === 'number' ? raw : null;
+    drawGroup(key, v === null ? 0 : v,
       probeText(v, snap && snap.state),
       (stale || v === null) ? GRAY : m.colorFor(v), conf);
   }
@@ -336,7 +399,7 @@ function render() {
 
   if (now - lastTips < conf.tooltipMs) return;
   lastTips = now;
-  const tips = tipsFor(cpuPct, snap, ram, conf);
+  const tips = tipsFor(cpuPct, cores, snap, ram, conf);
   for (const key in it) {
     const t = tips[key];
     if (!t) continue;
@@ -425,6 +488,24 @@ function syncGroups(conf, snap) {
   }
 }
 
+async function pickDevices(setting, devices, allText) {
+  const current = cfg().get(setting) || [];
+  const none = !current.length;
+  const items = [{ id: 'all', label: 'Global', description: allText, picked: none || current.includes('all') }]
+    .concat(devices.map(function (d) {
+      return Object.assign({ picked: current.includes(d.id) }, d);
+    }));
+  const picked = await vscode.window.showQuickPick(items, {
+    canPickMany: true,
+    placeHolder: 'Groupes affiches dans la barre d\'etat, un groupe par entree cochee'
+  });
+  if (picked === undefined) return;
+  const chosen = picked.map(function (i) { return i.id; });
+  const value = chosen.length === 1 && chosen[0] === 'all' ? [] : chosen;
+  await cfg().update(setting, value, vscode.ConfigurationTarget.Global);
+  render();
+}
+
 function activate(context) {
   context.subscriptions.push(vscode.commands.registerCommand('sysmon.restartProbe', function () {
     if (probe) { probe.restart(); render(); return; }
@@ -456,6 +537,24 @@ function activate(context) {
     const value = chosen.length === names.length ? [] : chosen;
     await cfg().update('diskDevices', value, vscode.ConfigurationTarget.Global);
     render();
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('sysmon.pickCpus', function () {
+    const ci = m.cpuInfo();
+    return pickDevices('cpuDevices', knownCores().map(function (id) {
+      return { id: id, label: 'C' + id, description: 'coeur logique ' + id };
+    }), 'Moyenne de tous les coeurs, ' + ci.cores + ' coeurs logiques');
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('sysmon.pickGpus', function () {
+    const ids = knownGpus(currentSnapshot());
+    if (!ids.length) {
+      vscode.window.showInformationMessage('Aucun GPU detecte pour l\'instant. Patientez quelques secondes puis reessayez.');
+      return;
+    }
+    return pickDevices('gpuDevices', ids.map(function (id) {
+      return { id: id, label: gpuLabel(id), description: 'adaptateur ' + id };
+    }), 'Somme de tous les adaptateurs');
   }));
 
   context.subscriptions.push(vscode.window.onDidChangeWindowState(function () {
@@ -501,6 +600,6 @@ function deactivate() {
 
 module.exports = {
   activate, deactivate,
-  shortDiskName, visibleDisks, groupKeys, labelFor,
+  shortDiskName, visibleDisks, groupKeys, labelFor, deviceKeys, knownGpus,
   claimLease, publishShare, sharedSnapshot, releaseShare, SHARE_FILE, OWNER_ID
 };
