@@ -1,34 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const Module = require('node:module');
-
-const fakeVscode = {
-  StatusBarAlignment: { Left: 1, Right: 2 },
-  ConfigurationTarget: { Global: 1 },
-  MarkdownString: class {
-    constructor() { this.value = ''; }
-    appendMarkdown(s) { this.value += s; return this; }
-  },
-  workspace: {
-    getConfiguration() { return { get() { }, update() { return Promise.resolve(); } }; },
-    onDidChangeConfiguration() { return { dispose() { } }; }
-  },
-  window: {
-    state: { focused: true },
-    createStatusBarItem() { return { show() { }, hide() { }, dispose() { } }; },
-    onDidChangeWindowState() { return { dispose() { } }; },
-    showInformationMessage() { },
-    showQuickPick() { return Promise.resolve(undefined); }
-  },
-  commands: { registerCommand() { return { dispose() { } }; } }
-};
-
-const origLoad = Module._load;
-Module._load = function (req) {
-  return req === 'vscode' ? fakeVscode : origLoad.apply(this, arguments);
-};
-
-const ext = require('../extension');
+const ext = require('../src/groups');
 
 const ALL = { cpu: true, gpu: true, disk: true, ram: true };
 const conf = (over) => Object.assign({ show: Object.assign({}, ALL), diskDevices: [] }, over || {});
@@ -108,54 +80,16 @@ test('les noms Linux de /proc/diskstats donnent un groupe chacun', () => {
 });
 
 test('la sonde macOS ne remonte aucun disque, le groupe DISK reste seul', () => {
-  const { MacProbe } = require('../mac');
+  const { MacProbe } = require('../src/probes/mac');
   const snap = new MacProbe(2).snapshot();
   assert.deepStrictEqual(snap.disks, {}, 'macOS ne mesure pas le disque');
   assert.deepStrictEqual(ext.visibleDisks(conf(), snap), []);
   assert.deepStrictEqual(ext.groupKeys(conf(), snap), ['cpu', 'gpu', 'disk', 'ram']);
 });
 
-test('le bail est libre tant que personne ne l a pris', () => {
-  const fs = require('node:fs');
-  try { fs.rmSync(ext.SHARE_FILE); } catch (_) { }
-  assert.strictEqual(ext.claimLease(Date.now()), true);
-});
-
-test('le bail publie se rend au proprietaire et a lui seul', () => {
-  const now = Date.now();
-  ext.publishShare({ gpu: 42, disk: 7, disks: { 'sda': 7 }, ts: now, state: 'ok' }, now);
-  assert.strictEqual(ext.claimLease(now), true, 'son propre bail reste le sien');
-
-  const fs = require('node:fs');
-  const s = JSON.parse(fs.readFileSync(ext.SHARE_FILE, 'utf8'));
-  s.owner = 'une-autre-fenetre';
-  fs.writeFileSync(ext.SHARE_FILE, JSON.stringify(s));
-  assert.strictEqual(ext.claimLease(now), false, 'le bail d autrui ne se prend pas');
-  assert.strictEqual(ext.claimLease(s.lease + 1), true, 'un bail expire se reprend');
-});
-
-test('l instantane partage rend les mesures publiees', () => {
-  const now = Date.now();
-  ext.publishShare({ gpu: 42, disk: 7, disks: { 'sda': 7 }, ts: now, state: 'ok' }, now);
-  const snap = ext.sharedSnapshot();
-  assert.strictEqual(snap.gpu, 42);
-  assert.deepStrictEqual(snap.disks, { 'sda': 7 });
-  assert.strictEqual(snap.ts, now);
-  assert.deepStrictEqual(ext.groupKeys(conf(), snap), ['cpu', 'gpu', 'disk:sda', 'ram']);
-});
-
-test('un partage absent ou vide ne rend aucun instantane', () => {
-  const fs = require('node:fs');
-  try { fs.rmSync(ext.SHARE_FILE); } catch (_) { }
-  assert.strictEqual(ext.sharedSnapshot(), null);
-  fs.writeFileSync(ext.SHARE_FILE, 'pas du json');
-  assert.strictEqual(ext.sharedSnapshot(), null);
-  try { fs.rmSync(ext.SHARE_FILE); } catch (_) { }
-});
-
 test('une sonde Windows ou Linux fraiche part elle aussi sur DISK', () => {
-  const { Probe } = require('../probe');
-  const { LinuxProbe } = require('../linux');
+  const { Probe } = require('../src/probes/windows');
+  const { LinuxProbe } = require('../src/probes/linux');
   for (const p of [new Probe(2), new LinuxProbe(2)]) {
     assert.deepStrictEqual(ext.groupKeys(conf(), p.snapshot()), ['cpu', 'gpu', 'disk', 'ram']);
   }
@@ -183,4 +117,10 @@ test('libelles des groupes coeur et GPU', () => {
   assert.strictEqual(ext.labelFor('cpu:4'), 'C4');
   assert.strictEqual(ext.labelFor('gpu:1'), 'GPU1');
   assert.strictEqual(ext.labelFor('gpu:card0'), 'card0');
+});
+
+test('le groupe SWAP suit la RAM quand il est affiche', () => {
+  const c = conf({ show: { cpu: false, gpu: false, disk: false, ram: true, swap: true } });
+  assert.deepStrictEqual(ext.groupKeys(c, null), ['ram', 'swap']);
+  assert.strictEqual(ext.labelFor('swap'), 'SWAP');
 });

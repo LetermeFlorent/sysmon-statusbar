@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const l = require('../linux');
+const l = require('../src/probes/linux');
 
 test('isWholeDisk accepte les disques entiers', () => {
   assert.ok(l.isWholeDisk('sda'));

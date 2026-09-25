@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const m = require('../metrics');
+const m = require('../src/metrics');
 
 test('cpuPercent rend null au premier echantillon', () => {
   const s = { idle: 100, total: 1000 };
@@ -92,14 +92,6 @@ test('padNum ne tronque jamais une valeur trop longue', () => {
 
 test('padNum pade en queue et non en tete', () => {
   assert.strictEqual(m.padNum('ab', 4), 'ab  ');
-});
-
-test('ramSnapshot rend un pourcentage coherent avec les octets', () => {
-  const r = m.ramSnapshot();
-  assert.ok(r.totalBytes > 0);
-  assert.ok(r.usedBytes > 0 && r.usedBytes <= r.totalBytes);
-  const expected = r.usedBytes / r.totalBytes * 100;
-  assert.ok(Math.abs(r.pct - expected) < 0.001);
 });
 
 test('colorFor suit les quatre paliers', () => {

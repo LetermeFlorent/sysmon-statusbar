@@ -1,8 +1,8 @@
 {
 	"name": "sysmon-statusbar",
-	"displayName": "System Monitor Status Bar",
-	"description": "Status bar display of CPU, GPU, disk and system memory usage, as coloured progress bars with live values.",
-	"version": "0.8.0",
+	"displayName": "%displayName%",
+	"description": "%description%",
+	"version": "0.9.0",
 	"publisher": "letermeflorent",
 	"license": "MIT",
 	"icon": "icon.png",
@@ -19,19 +19,25 @@
 		"gpu",
 		"disk",
 		"memory",
+		"ram",
+		"swap",
 		"monitor",
+		"system monitor",
+		"resource monitor",
+		"performance",
 		"status bar"
 	],
 	"engines": {
 		"vscode": "^1.75.0"
 	},
 	"categories": [
+		"Visualization",
 		"Other"
 	],
 	"activationEvents": [
 		"onStartupFinished"
 	],
-	"main": "./extension.js",
+	"main": "./src/extension.js",
 	"extensionKind": [
 		"ui"
 	],
@@ -42,31 +48,35 @@
 		"commands": [
 			{
 				"command": "sysmon.restartProbe",
-				"title": "System Monitor: Relancer la sonde GPU/disque"
+				"title": "%command.restartProbe%",
+				"category": "System Monitor"
 			},
 			{
 				"command": "sysmon.pickCpus",
-				"title": "System Monitor: Choisir les coeurs CPU affiches"
+				"title": "%command.pickCpus%",
+				"category": "System Monitor"
 			},
 			{
 				"command": "sysmon.pickGpus",
-				"title": "System Monitor: Choisir les GPU affiches"
+				"title": "%command.pickGpus%",
+				"category": "System Monitor"
 			},
 			{
 				"command": "sysmon.pickDisks",
-				"title": "System Monitor: Choisir les disques affiches"
+				"title": "%command.pickDisks%",
+				"category": "System Monitor"
 			}
 		],
 		"icons": {
 			"sysmon-bar-full": {
-				"description": "Barre pleine",
+				"description": "%icon.barFull%",
 				"default": {
 					"fontPath": "./bar.woff",
 					"fontCharacter": "\\E000"
 				}
 			},
 			"sysmon-bar-empty": {
-				"description": "Barre vide",
+				"description": "%icon.barEmpty%",
 				"default": {
 					"fontPath": "./bar.woff",
 					"fontCharacter": "\\E001"
@@ -79,12 +89,12 @@
 				"sysmon.refreshSeconds": {
 					"type": "number",
 					"default": 2,
-					"description": "Intervalle de rafraichissement de l'affichage (secondes). Minimum 1, maximum 60."
+					"description": "%config.refreshSeconds%"
 				},
 				"sysmon.barWidth": {
 					"type": "number",
 					"default": 5,
-					"description": "Largeur de chaque barre (cellules). Minimum 4, maximum 20."
+					"description": "%config.barWidth%"
 				},
 				"sysmon.alignment": {
 					"type": "string",
@@ -93,27 +103,49 @@
 						"right"
 					],
 					"default": "left",
-					"description": "Cote de la barre d'etat ou afficher les indicateurs."
+					"description": "%config.alignment%",
+					"enumDescriptions": [
+						"%config.alignment.left%",
+						"%config.alignment.right%"
+					]
 				},
 				"sysmon.showCpu": {
 					"type": "boolean",
 					"default": true,
-					"description": "Afficher le groupe CPU, charge moyenne de tous les coeurs logiques."
+					"description": "%config.showCpu%"
 				},
 				"sysmon.showGpu": {
 					"type": "boolean",
 					"default": true,
-					"description": "Afficher le groupe GPU, utilisation des moteurs 3D. Windows via typeperf, Linux via sysfs ou nvidia-smi, macOS via ioreg."
+					"description": "%config.showGpu%"
 				},
 				"sysmon.showDisk": {
 					"type": "boolean",
 					"default": true,
-					"description": "Afficher les groupes disque, un par disque physique. Windows et Linux ; non mesure sur macOS, qui n'expose pas de pourcentage d'occupation sans privileges."
+					"description": "%config.showDisk%"
 				},
 				"sysmon.showRam": {
 					"type": "boolean",
 					"default": true,
-					"description": "Afficher le groupe RAM, memoire systeme utilisee sur memoire totale."
+					"description": "%config.showRam%"
+				},
+				"sysmon.showSwap": {
+					"type": "boolean",
+					"default": true,
+					"description": "%config.showSwap%"
+				},
+				"sysmon.ramValue": {
+					"type": "string",
+					"enum": [
+						"used",
+						"free"
+					],
+					"default": "used",
+					"description": "%config.ramValue%",
+					"enumDescriptions": [
+						"%config.ramValue.used%",
+						"%config.ramValue.free%"
+					]
 				},
 				"sysmon.diskDevices": {
 					"type": "array",
@@ -121,7 +153,7 @@
 						"type": "string"
 					},
 					"default": [],
-					"description": "Disques affiches dans la barre d etat, un groupe par disque (ex. [\"0 C:\"] sur Windows, [\"sda\"] sur Linux). Vide = tous les disques vus. Se remplit facilement via la commande System Monitor: Choisir les disques affiches."
+					"description": "%config.diskDevices%"
 				},
 				"sysmon.cpuDevices": {
 					"type": "array",
@@ -129,7 +161,7 @@
 						"type": "string"
 					},
 					"default": [],
-					"description": "Groupes CPU affiches : \"all\" pour la moyenne de tous les coeurs, puis un numero de coeur logique par groupe (ex. [\"all\", \"0\", \"1\"]). Vide = moyenne seule. Se remplit via la commande System Monitor: Choisir les coeurs CPU affiches."
+					"description": "%config.cpuDevices%"
 				},
 				"sysmon.gpuDevices": {
 					"type": "array",
@@ -137,49 +169,50 @@
 						"type": "string"
 					},
 					"default": [],
-					"description": "Groupes GPU affiches : \"all\" pour la somme de tous les adaptateurs, puis un groupe par GPU (\"0\", \"1\" sur Windows et avec nvidia-smi, \"card0\" sur Linux). Vide = somme seule. Se remplit via la commande System Monitor: Choisir les GPU affiches."
+					"description": "%config.gpuDevices%"
 				},
 				"sysmon.showLabels": {
 					"type": "boolean",
 					"default": true,
-					"description": "Afficher le libelle de chaque groupe (CPU, GPU, DISK, RAM)."
+					"description": "%config.showLabels%"
 				},
 				"sysmon.showBars": {
 					"type": "boolean",
 					"default": true,
-					"description": "Afficher la barre de progression de chaque groupe."
+					"description": "%config.showBars%"
 				},
 				"sysmon.showValues": {
 					"type": "boolean",
 					"default": true,
-					"description": "Afficher la valeur chiffree de chaque groupe."
+					"description": "%config.showValues%"
 				},
 				"sysmon.probeRestartSeconds": {
 					"type": "number",
 					"default": 300,
-					"description": "Intervalle de recyclage de la sonde GPU/disque (secondes). Sur Windows, typeperf fige son jeu d'instances au demarrage ; le recyclage permet de voir les nouveaux process. Sur Linux, le recyclage relance la detection du GPU (utile si un pilote se charge apres coup)."
+					"description": "%config.probeRestartSeconds%"
 				},
 				"sysmon.tooltipSeconds": {
 					"type": "number",
 					"default": 5,
-					"description": "Intervalle de reconstruction des infobulles (secondes). VS Code ne rafraichit pas une infobulle affichee, donc la recalculer a chaque tick ne sert a rien."
+					"description": "%config.tooltipSeconds%"
 				},
 				"sysmon.shareProbe": {
 					"type": "boolean",
 					"default": true,
-					"description": "Partager une seule sonde entre toutes les fenetres VS Code, via un fichier de bail dans le dossier temporaire. Une fenetre mesure, les autres lisent son resultat."
+					"description": "%config.shareProbe%"
 				},
 				"sysmon.pauseWhenUnfocused": {
 					"type": "boolean",
 					"default": false,
-					"description": "Arreter la sonde quand la fenetre n'a pas le focus. VS Code ne sait pas dire si une fenetre est visible, seulement si elle est active : une fenetre affichee sur un second ecran se retrouve donc grisee. Le partage de sonde rend ce reglage inutile dans la plupart des cas."
+					"description": "%config.pauseWhenUnfocused%"
 				},
 				"sysmon.unfocusedMultiplier": {
 					"type": "number",
 					"default": 1,
-					"description": "Facteur applique a l'intervalle de rafraichissement quand la fenetre n'a pas le focus. 1 garde la meme cadence partout, ce qui evite qu'une fenetre visible sur un second ecran traine derriere."
+					"description": "%config.unfocusedMultiplier%"
 				}
 			}
 		}
-	}
+	},
+	"l10n": "./l10n"
 }

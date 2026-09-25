@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const p = require('../probe');
+const p = require('../src/probes/windows');
 
 const HDR_EN = '"(PDH-CSV 4.0)","\\\\HOST\\GPU Engine(pid_1_engtype_3D)\\Utilization Percentage",' +
   '"\\\\HOST\\GPU Engine(pid_2_engtype_3D)\\Utilization Percentage",' +

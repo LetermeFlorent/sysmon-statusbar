@@ -32,10 +32,15 @@ function cpuPercent(prev, cur) {
   return Math.max(0, Math.min(100, (1 - di / dt) * 100));
 }
 
-function ramSnapshot() {
+function usage(usedBytes, totalBytes) {
+  const used = Math.max(0, Math.min(totalBytes, usedBytes));
+  return { usedBytes: used, totalBytes, freeBytes: totalBytes - used, pct: totalBytes > 0 ? used / totalBytes * 100 : 0 };
+}
+
+function ramSnapshot(availableBytes) {
   const totalBytes = os.totalmem();
-  const usedBytes = totalBytes - os.freemem();
-  return { usedBytes, totalBytes, pct: totalBytes > 0 ? usedBytes / totalBytes * 100 : 0 };
+  const free = typeof availableBytes === 'number' ? availableBytes : os.freemem();
+  return usage(totalBytes - free, totalBytes);
 }
 
 function formatGb(bytes) {
@@ -89,6 +94,6 @@ function formatAge(ms) {
 }
 
 module.exports = {
-  clampInt, cpuSample, cpuCoreSamples, cpuPercent, ramSnapshot,
+  clampInt, cpuSample, cpuCoreSamples, cpuPercent, usage, ramSnapshot,
   formatGb, formatRam, formatPercent, padNum, colorFor, bar, cpuInfo, formatAge
 };

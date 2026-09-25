@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const mac = require('../mac');
+const mac = require('../src/probes/mac');
 
 const IOREG_INTEL = [
   '+-o IntelAccelerator  <class IOAccelerator, id 0x100000abc, registered>',
