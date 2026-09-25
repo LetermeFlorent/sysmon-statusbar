@@ -1,6 +1,6 @@
 # System Monitor Status Bar
 
-Is it your build, or is it your machine? CPU, GPU, disk and system memory as real coloured progress bars in the VS Code status bar, on whichever side you want them.
+Is it your build, or is it your machine? CPU, GPU, disk, system memory and swap as real coloured progress bars in the VS Code status bar, on whichever side you want them.
 
 ![CPU, GPU, disk and memory in the VS Code status bar](https://raw.githubusercontent.com/LetermeFlorent/sysmon-statusbar/master/media/statusbar.png)
 
@@ -10,20 +10,20 @@ Something is slow, and you have no idea which resource ran out. Alt-tabbing to T
 
 ## What you get
 
-CPU, GPU, memory and one group per disk, always visible, updating on their own:
+CPU, GPU, memory, swap and one group per disk, always visible, updating on their own:
 
 ```
-CPU ▓▓░░░ 34%   GPU ░░░░░ 12%   C: ▓▓░░░ 43%   D: ░░░░░ 8%   RAM ▓▓░░░ 12.35 / 31.74 GB
+CPU ▓▓░░░ 34%   GPU ░░░░░ 12%   C: ▓▓░░░ 43%   D: ░░░░░ 8%   RAM ▓▓░░░ 12.35 / 31.74 GB   SWAP ▓░░░░ 1.20 / 8.00 GB
 ```
 
 Every disk gets its own group, labelled with its own name: volume letters on
 Windows, the device name on Linux (`sda`, `nvme0n1`). Which ones appear is up
-to you, through `System Monitor: Choisir les disques affiches` or the
+to you, through `System Monitor: Choose the disks shown` or the
 `diskDevices` setting.
 
 CPU and GPU work the same way. By default each is a single group, the average of
-every logical core and the sum of every graphics adapter. `System Monitor: Choisir
-les coeurs CPU affiches` and `System Monitor: Choisir les GPU affiches` add one
+every logical core and the sum of every graphics adapter. `System Monitor: Choose
+the CPU cores shown` and `System Monitor: Choose the GPUs shown` add one
 group per core (`C0`, `C1`...) or per adapter (`GPU0`, `GPU1` on Windows and
 with `nvidia-smi`, `card0` on Linux), with or without the global group next to
 them. On Windows a laptop often reports a second, virtual adapter that stays at
@@ -33,7 +33,7 @@ Bars are drawn with an embedded icon font, sharing the exact glyphs and fill alg
 
 One setting moves every group from left to right and back, with no window reload. Memory is shown in GB to two decimals, used against total, because "78 %" does not tell you whether the 4 GB you are about to allocate will fit. Values are padded to a fixed width with figure spaces, trailing, so each reading sits the same distance from its bar and going from 9 % to 100 % does not slide the whole band along.
 
-Hovering gives the processor model, core count, exact free memory and the age of the last GPU sample. Each disk group carries its full instance name, which the label shortens, and a link to pick which disks are shown.
+Hovering gives the processor model, core count, used, free and total memory and swap, and the age of the last GPU sample. Each disk group carries its full instance name, which the label shortens, and a link to pick which disks are shown.
 
 ## Where the numbers come from
 
@@ -50,6 +50,12 @@ On Linux, disk comes from `/proc/diskstats`: field 13 is the milliseconds spent 
 GPU on Linux is auto-detected once at startup, in this order: `/sys/class/drm/card*/device/gpu_busy_percent` if the kernel exposes it, which covers AMD's `amdgpu` driver and some newer Intel setups, otherwise `nvidia-smi` if it resolves on `PATH`. Unlike the Windows probe, `nvidia-smi` is invoked once per refresh rather than streamed, because its own startup cost is a few tens of milliseconds, negligible next to the nearly three seconds a spawned PowerShell process costs, which is exactly what streaming was built to avoid on Windows. If neither source is available, the group greys out with `--`, the same degraded state as a missing `typeperf`.
 
 On macOS, GPU comes from `ioreg`, reading the `PerformanceStatistics` dictionary of the graphics accelerator. Both `AGXAccelerator` (Apple Silicon) and `IOAccelerator` (Intel and AMD) are tried, and the first one that answers is kept. Disk is deliberately left unmeasured and shows `n/a`: macOS exposes no occupancy percentage without privileges, since `iostat` reports throughput rather than busy time and `fs_usage` needs root. Turning a throughput into a percentage would produce a number that looks right and means nothing.
+
+### Memory and swap
+
+On Windows and macOS, free memory is what Node's `os.freemem()` reports. On Linux the extension reads `MemAvailable` from `/proc/meminfo` instead, because `os.freemem()` returns `MemFree`, which leaves out the page cache the kernel hands back on demand and makes a healthy machine look nearly full.
+
+Swap comes from `/proc/meminfo` on Linux and from `sysctl -n vm.swapusage` on macOS. On Windows the usage percentage is one more counter in the `typeperf` process already running, `\Paging File(_Total)\% Usage`, and the allocated size is read once from `Win32_PageFileUsage` when the extension starts. On a French Windows `typeperf` only accepts the counter as `\Fichier d’échange(_Total)\Pourcentage d’utilisation`, typographic apostrophes included, so both spellings are passed. A machine with no paging file or no swap shows the group greyed out with `aucune` or `off`.
 
 ### Why the Windows GPU probe streams instead of querying per tick
 
@@ -73,6 +79,12 @@ Tooltips are rebuilt on their own schedule, five seconds by default, rather than
 
 Only one window measures. The others read what it published, through a lease file in the temp directory, so three open windows cost one probe instead of three while all three keep showing live values. If the window holding the lease closes, another takes over; if it is killed outright, the lease expires after eight seconds. Set `shareProbe` to `false` to give every window its own probe.
 
+## Languages
+
+Commands, settings and tooltips are in English, and in French when VS Code runs in French. Group labels (`CPU`, `GPU`, `RAM`, `SWAP`, disk names) stay the same in every language so the band keeps its width.
+
+Every status bar item has a name, shown when you right-click the status bar to hide it, and a screen reader description such as "CPU: 34 percent".
+
 ## Privacy
 
 No telemetry, no analytics, no network access of any kind. The extension reads two Node built-ins and, depending on platform, a Windows performance counter, a Linux sysfs or proc file, or the macOS registry through `ioreg`, all locally. Nothing leaves the machine.
@@ -88,10 +100,12 @@ No telemetry, no analytics, no network access of any kind. The extension reads t
 | `sysmon.showGpu` | `true` | Show the GPU group |
 | `sysmon.showDisk` | `true` | Show the disk groups, one per physical device |
 | `sysmon.showRam` | `true` | Show the RAM group |
-| `sysmon.diskDevices` | `[]` | Disks to display, by name (`"0 C:"` on Windows, `"sda"` on Linux). Empty means every disk seen, so one plugged in later still shows up. Easiest to set through the `System Monitor: Choisir les disques affiches` command rather than typed by hand |
+| `sysmon.showSwap` | `true` | Show the SWAP group: paging file on Windows, swap on Linux and macOS |
+| `sysmon.ramValue` | `"used"` | What the RAM group shows: `used` for used against total, `free` for free memory alone (`19.39 GB free`) |
+| `sysmon.diskDevices` | `[]` | Disks to display, by name (`"0 C:"` on Windows, `"sda"` on Linux). Empty means every disk seen, so one plugged in later still shows up. Easiest to set through the `System Monitor: Choose the disks shown` command rather than typed by hand |
 | `sysmon.cpuDevices` | `[]` | CPU groups to display: `"all"` for the average, then logical core numbers (`"0"`, `"1"`). Empty means the average alone |
 | `sysmon.gpuDevices` | `[]` | GPU groups to display: `"all"` for the sum of every adapter, then adapter ids (`"0"` on Windows, `"card0"` on Linux). Empty means the sum alone. Windows numbers adapters by LUID order, which is usually stable across reboots but not guaranteed |
-| `sysmon.showLabels` | `true` | Show the `CPU` / `GPU` / `DISK` / `RAM` label of each group |
+| `sysmon.showLabels` | `true` | Show the `CPU` / `GPU` / `DISK` / `RAM` / `SWAP` label of each group |
 | `sysmon.showBars` | `true` | Show the progress bar of each group |
 | `sysmon.showValues` | `true` | Show the numeric value of each group |
 | `sysmon.probeRestartSeconds` | `300` | Probe recycle interval, in seconds (minimum 60) |
@@ -116,20 +130,20 @@ showCpu/showGpu false      DISK ▓░░░░ 11%   RAM ▓▓░░░ 12.35 
 
 | Command | What it does |
 | --- | --- |
-| `System Monitor: Relancer la sonde GPU/disque` | Restarts the probe immediately, from the command palette |
-| `System Monitor: Choisir les disques affiches` | Checklist of every disk seen so far. Leave everything checked for the default, where every disk counts, or uncheck some to only count the ones left. Also reachable from the DISK hover |
-| `System Monitor: Choisir les coeurs CPU affiches` | Checklist of the global average and every logical core. Also reachable from the CPU hover |
-| `System Monitor: Choisir les GPU affiches` | Checklist of the global sum and every adapter seen by the probe. Also reachable from the GPU hover |
+| `System Monitor: Restart the GPU/disk probe` | Restarts the probe immediately, from the command palette |
+| `System Monitor: Choose the disks shown` | Checklist of every disk seen so far. Leave everything checked for the default, where every disk counts, or uncheck some to only count the ones left. Also reachable from the DISK hover |
+| `System Monitor: Choose the CPU cores shown` | Checklist of the global average and every logical core. Also reachable from the CPU hover |
+| `System Monitor: Choose the GPUs shown` | Checklist of the global sum and every adapter seen by the probe. Also reachable from the GPU hover |
 
 ## Troubleshooting
 
 If the bars render as empty boxes, restart VS Code. The icon font is loaded at startup, and a freshly installed extension does not get it until then.
 
-If GPU or DISK shows `--` in grey and stays there: on Windows, `typeperf` could not start or neither spelling of the counter resolved. Check it by hand with `typeperf "\GPU Engine(*engtype_3D)\Utilization Percentage" -si 2 -sc 2`, and on builds where the performance counters have been disabled or corrupted, `lodctr /R` rebuilds them. On Linux, GPU stays `--` when neither `gpu_busy_percent` nor `nvidia-smi` was found at startup; run `System Monitor: Relancer la sonde GPU/disque` after installing drivers to re-detect without restarting the window. `/proc/diskstats` is present on every real Linux kernel, so DISK staying `--` there points at something else, most likely a container or an unusually locked-down `/proc`.
+If GPU or DISK shows `--` in grey and stays there: on Windows, `typeperf` could not start or neither spelling of the counter resolved. Check it by hand with `typeperf "\GPU Engine(*engtype_3D)\Utilization Percentage" -si 2 -sc 2`, and on builds where the performance counters have been disabled or corrupted, `lodctr /R` rebuilds them. On Linux, GPU stays `--` when neither `gpu_busy_percent` nor `nvidia-smi` was found at startup; run `System Monitor: Restart the GPU/disk probe` after installing drivers to re-detect without restarting the window. `/proc/diskstats` is present on every real Linux kernel, so DISK staying `--` there points at something else, most likely a container or an unusually locked-down `/proc`.
 
 On macOS, DISK showing `n/a` is expected and permanent, since the platform exposes no occupancy percentage without privileges. GPU showing `n/a` means neither accelerator class answered; `ioreg -r -d 1 -w 0 -c AGXAccelerator | grep Utilization` tells you whether the counter exists on your hardware.
 
-A group greyed out with a stale number means no sample has arrived for thirty seconds. Run `System Monitor: Relancer la sonde GPU/disque` from the command palette.
+A group greyed out with a stale number means no sample has arrived for thirty seconds. Run `System Monitor: Restart the GPU/disk probe` from the command palette.
 
 CPU sitting at `--` is only expected on the very first tick. If it persists, the refresh timer is not firing: check that `sysmon.refreshSeconds` is a number and not a string.
 

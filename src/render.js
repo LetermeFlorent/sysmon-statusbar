@@ -18,8 +18,12 @@ function staleMs(refreshSeconds) {
   return Math.max(30000, refreshSeconds * 3000);
 }
 
+function spokenName(key) {
+  return g.isDiskKey(key) ? t('Disk {0}', g.labelFor(key)) : g.labelFor(key);
+}
+
 function spokenPercent(key, v) {
-  return v === null ? t('{0}: no reading', g.labelFor(key)) : t('{0}: {1} percent', g.labelFor(key), Math.round(v));
+  return v === null ? t('{0}: no reading', spokenName(key)) : t('{0}: {1} percent', spokenName(key), Math.round(v));
 }
 
 function probeText(pct, state) {

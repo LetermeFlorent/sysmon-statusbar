@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.9.0
+
+Swap gets its own group, and memory can be read as free instead of used. The
+SWAP group shows the paging file on Windows, `/proc/meminfo` swap on Linux and
+`vm.swapusage` on macOS; `sysmon.showSwap` hides it. `sysmon.ramValue` set to
+`free` turns the RAM reading into `19.39 GB free`. On Linux, RAM now counts
+`MemAvailable` as free, where `os.freemem()` left the page cache out and made
+the bar look fuller than the machine was.
+
+The interface used to mix English descriptions with French commands written
+without accents. Everything is now in English, with a full French translation
+picked up when VS Code runs in French. Command titles changed accordingly, and
+their ids did not, so keybindings keep working.
+
+Each status bar item carries a name and a screen reader description, and the
+items can be hidden one by one from the status bar context menu.
+
+The source moved under `src/`, split so that no file passes 150 lines. The
+Marketplace category is now Visualization. Tests run on Windows, Linux and
+macOS in GitHub Actions, and a `v*` tag builds the package and publishes it.
+
 ## 0.8.0
 
 Disks could already be picked one by one, CPU and GPU could not. A machine with

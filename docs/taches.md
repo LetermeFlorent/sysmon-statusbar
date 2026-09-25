@@ -1,6 +1,6 @@
 # Tâches 0.9.0
 
-Avancement : 55 %. Reprise : accessibilité vérifiée dans VS Code, puis CI.
+Avancement : 90 %. Reprise : essai du paquet `.vsix` dans VS Code, puis tag `v0.9.0` si Florent valide.
 
 - [x] Audit du code et des sources de swap
 - [x] Découpage sous `src/`, fichiers sous 150 lignes, tests à jour
@@ -8,6 +8,6 @@ Avancement : 55 %. Reprise : accessibilité vérifiée dans VS Code, puis CI.
 - [x] Swap et mémoire libre, Windows, Linux, macOS
 - [x] Accessibilité et identifiants des éléments
 - [x] Catégorie et mots-clés
-- [ ] CI et publication par tag
-- [ ] README, CHANGELOG, version 0.9.0
+- [x] CI et publication par tag
+- [x] README, CHANGELOG, version 0.9.0
 - [ ] Vérification dans VS Code avec le paquet `.vsix`
